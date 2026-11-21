@@ -1,9 +1,9 @@
-﻿# Bomberman Next Generation
+# Bomberman Next Generation
 
 Bomberman Generations-style versus game for Godot 4.7.1 (GDScript). Local multiplayer, up to 4 players, keyboard or PlayStation controllers, web (browser).
 
 ## Status
-Phase 1: planning / early development.
+Phase 1 (local multiplayer, base mechanics) is playable: main menu, 4-player lobby, Bomberman-style movement, bombs and chain reactions, rounds with sudden death, results. Still to do in Phase 1: a full 4-controller browser test and cleanup. Power-ups and match settings come in Phase 2.
 
 ## Assets
 Art, models and audio are **not** in this repository. The game falls back to procedural placeholders when `assets_ext/` is missing, so a fresh clone runs.
