@@ -25,7 +25,8 @@ var stats := PlayerStats.new()
 var alive := true
 var input_enabled := true
 
-## Must provide is_blocked_for(player, cell: Vector2i) -> bool and try_place_bomb(player).
+## Must provide is_blocked_for(player, cell), try_place_bomb(player), try_kick(player, dir) and
+## try_punch(player).
 var _world: Node
 var _previous_pos := Vector2.ZERO  # grid_pos at the previous tick, for interpolation
 var _held_dirs: Array[Vector2i] = []  # most recently pressed first
@@ -103,6 +104,10 @@ func _on_action_pressed(device_id: String, action: StringName) -> void:
 		if alive and input_enabled:
 			_world.try_place_bomb(self)
 		return
+	if action == &"special":
+		if alive and input_enabled and _world.try_punch(self):
+			_play_action_pop()
+		return
 	if not DIRECTION_ACTIONS.has(action):
 		return
 	var dir: Vector2i = DIRECTION_ACTIONS[action]
@@ -119,8 +124,14 @@ func _physics_process(delta: float) -> void:
 	_moving = result.dir != Vector2i.ZERO
 	if _moving:
 		facing = result.dir
+	elif not dirs.is_empty():
+		facing = dirs[0]  # turn to face a direction even when blocked (aiming a punch)
 	_previous_pos = grid_pos
 	grid_pos = result.pos
+	# Kick: pressing into a bomb that blocks the way.
+	if stats.has_kick and not dirs.is_empty() and result.dir != dirs[0]:
+		if _world.try_kick(self, dirs[0]):
+			_play_action_pop()
 
 
 func _process(delta: float) -> void:
@@ -162,6 +173,13 @@ func _is_blocked(cell: Vector2i) -> bool:
 func _sync_transform(fraction: float) -> void:
 	var shown := _previous_pos.lerp(grid_pos, fraction)
 	position = Vector3(shown.x, 0.0, shown.y)
+
+
+## Small squash-and-stretch for a kick or punch.
+func _play_action_pop() -> void:
+	var tween := create_tween()
+	tween.tween_property(_model, "scale", Vector3(1.25, 0.8, 1.25), 0.06)
+	tween.tween_property(_model, "scale", Vector3.ONE, 0.12)
 
 
 # --- Protection visuals --------------------------------------------------------------

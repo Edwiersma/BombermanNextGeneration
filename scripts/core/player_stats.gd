@@ -13,6 +13,8 @@ var speed_level := Rules.START_SPEED_LEVEL
 ## Every item picked up this round, in order.
 var collected: Array[int] = []
 var has_heart := false
+var has_kick := false   # walk into a bomb to kick it
+var has_punch := false  # special punches the bomb in front
 var vest_ticks := 0   # Safety Vest time left
 var grace_ticks := 0  # invulnerable after a Heart absorbed a hit
 
@@ -24,6 +26,8 @@ func reset(settings: MatchSettings) -> void:
 	speed_level = Rules.START_SPEED_LEVEL
 	collected.clear()
 	has_heart = false
+	has_kick = false
+	has_punch = false
 	vest_ticks = 0
 	grace_ticks = 0
 
@@ -69,4 +73,8 @@ func apply(item: int) -> void:
 			has_heart = true
 		Items.Type.VEST:
 			vest_ticks = Rules.VEST_TICKS
+		Items.Type.KICK:
+			has_kick = true
+		Items.Type.PUNCH:
+			has_punch = true
 	collected.append(item)

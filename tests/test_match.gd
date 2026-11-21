@@ -307,3 +307,45 @@ func test_vest_survives_blasts_but_not_crush() -> void:
 	m.rules.block_landed.emit(p.get_cell())
 	check(not p.alive, "a falling block still crushes")
 	m.free()
+
+
+func test_walking_into_a_bomb_kicks_it_only_with_kick() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	p.grid_pos = Vector2(1, 3)
+	m.try_place_bomb(p)          # bomb at (1, 3)
+	p.grid_pos = Vector2(1, 1)
+	check(not m.try_kick(p, Vector2i.DOWN), "no kick without the item")  # (1, 2) is empty anyway
+	p.grid_pos = Vector2(1, 2)
+	check(not m.try_kick(p, Vector2i.DOWN), "still no kick without the item")
+	p.stats.apply(Items.Type.KICK)
+	check(m.try_kick(p, Vector2i.DOWN), "kicked with the item")
+	check(m.bombs.is_sliding(Vector2i(1, 3)), "sliding away")
+	m.free()
+
+
+func test_special_punches_the_bomb_in_front() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	p.grid_pos = Vector2(1, 2)
+	m.try_place_bomb(p)          # bomb at (1, 2)
+	p.grid_pos = Vector2(1, 1)
+	p.facing = Vector2i.DOWN
+	check(not m.try_punch(p), "no punch without the item")
+	p.stats.apply(Items.Type.PUNCH)
+	check(m.try_punch(p), "punched")
+	check_eq(m.bombs.flying_count(), 1, "bomb in the air")
+	m.free()
+
+
+func test_kicked_bomb_stops_before_another_player() -> void:
+	var m := _playing([0, 1])
+	var kicker: Node3D = m.players[0]
+	var other: Node3D = m.players[1]
+	kicker.grid_pos = Vector2(3, 3)
+	m.try_place_bomb(kicker)     # bomb at (3, 3); classic row 3 is open from x=1 to x=4
+	kicker.grid_pos = Vector2(2, 3)
+	kicker.stats.apply(Items.Type.KICK)
+	other.grid_pos = Vector2(4, 3)
+	check(not m.try_kick(kicker, Vector2i.RIGHT), "player right behind the bomb: no room")
+	m.free()

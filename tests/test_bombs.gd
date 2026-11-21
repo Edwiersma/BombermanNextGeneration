@@ -18,7 +18,7 @@ var exploded: Array = []  # [cell, owner, flames] per explosion
 
 func _field(rows: Array) -> BombField:
 	var field := BombField.new(grid_from_rows(rows))
-	field.bomb_exploded.connect(func(cell, owner, flames): exploded.append([cell, owner, flames]))
+	field.bomb_exploded.connect(func(_id, cell, owner, flames): exploded.append([cell, owner, flames]))
 	return field
 
 

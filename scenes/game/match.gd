@@ -28,7 +28,7 @@ var rules := MatchRules.new()
 var players: Array = []  # Player node or null, indexed by slot
 
 var _rng := RandomNumberGenerator.new()
-var _bomb_views := {}  # Vector2i -> BombView
+var _bomb_views := {}  # bomb id -> BombView
 var _item_views := {}  # Vector2i -> ItemView
 var _ticks := 0
 var _pause_menu: CanvasLayer
@@ -92,6 +92,11 @@ func _physics_process(_delta: float) -> void:
 
 func _process(_delta: float) -> void:
 	hud.set_time(rules.time_left if rules.has_time_limit() else -1, rules.sudden_death)
+	# Bombs can slide and fly: views follow their logical positions.
+	var positions := bombs.bomb_positions()
+	for id in _bomb_views:
+		if positions.has(id):
+			_bomb_views[id].position = positions[id]
 	if debug_label.visible:
 		var lines: Array[String] = ["FPS %d   physics ticks %d   state %s   (F3 hides)" % [
 			Engine.get_frames_per_second(), _ticks, MatchRules.State.keys()[rules.state]]]
@@ -135,6 +140,20 @@ func try_place_bomb(player: Node) -> void:
 	if not rules.is_playing() or get_tree().paused or bombs.bomb_count(player.slot) >= player.stats.max_bombs:
 		return
 	bombs.place_bomb(player.get_cell(), player.slot, player.stats.fire_range)
+
+
+## Kick: `player` is pressing `dir` into a bomb right in front of them. True if it slid off.
+func try_kick(player: Node, dir: Vector2i) -> bool:
+	if not rules.is_playing() or get_tree().paused or not player.stats.has_kick:
+		return false
+	return bombs.kick(player.get_cell() + dir, dir)
+
+
+## Punch: sends the bomb in front of `player` flying. True if there was one.
+func try_punch(player: Node) -> bool:
+	if not rules.is_playing() or get_tree().paused or not player.stats.has_punch:
+		return false
+	return bombs.punch(player.get_cell() + player.facing, player.facing)
 
 
 # --- Match flow --------------------------------------------------------------
@@ -288,12 +307,7 @@ func _on_player_died(player: Node) -> void:
 
 ## Where a dead player's items may land: open floor without a bomb, a flame or a living player.
 func _is_free_for_items(cell: Vector2i) -> bool:
-	if bombs.has_bomb(cell) or bombs.has_flame(cell):
-		return false
-	for player in players:
-		if player and player.alive and player.get_cell() == cell:
-			return false
-	return true
+	return not bombs.has_bomb(cell) and not bombs.has_flame(cell) and not _living_player_at(cell)
 
 
 # --- Arena, players, effects -------------------------------------------------
@@ -311,9 +325,11 @@ func _build_arena() -> void:
 	items.item_removed.connect(_on_item_removed)
 	bombs = BombField.new(grid)
 	bombs.items = items
+	bombs.player_at = _living_player_at
 	bombs.bomb_placed.connect(_on_bomb_placed)
 	bombs.bomb_exploded.connect(_on_bomb_exploded)
-	bombs.bomb_removed.connect(_remove_bomb_view)
+	bombs.bomb_removed.connect(func(id, _cell): _remove_bomb_view(id))
+	bombs.bomb_changed.connect(_on_bomb_changed)
 	bombs.block_burning.connect(arena.burn_block)
 	bombs.block_destroyed.connect(items.reveal)
 
@@ -367,15 +383,20 @@ func _spawn_player(slot: int, device: String) -> void:
 	players[slot] = player
 
 
-func _on_bomb_placed(cell: Vector2i, _owner: int) -> void:
+func _on_bomb_placed(id: int, cell: Vector2i, _owner: int) -> void:
 	var view := BombView.new()
 	view.position = Grid.cell_to_world(cell)
 	effects.add_child(view)
-	_bomb_views[cell] = view
+	_bomb_views[id] = view
 
 
-func _on_bomb_exploded(cell: Vector2i, _owner: int, flames: Array) -> void:
-	_remove_bomb_view(cell)
+func _on_bomb_changed(id: int) -> void:
+	if _bomb_views.has(id):
+		_bomb_views[id].set_dangerous()
+
+
+func _on_bomb_exploded(id: int, _cell: Vector2i, _owner: int, flames: Array) -> void:
+	_remove_bomb_view(id)
 	var view := ExplosionView.new()
 	view.setup(flames, Rules.ticks_to_seconds(Rules.FLAME_TICKS))
 	effects.add_child(view)
@@ -406,10 +427,17 @@ func _show_popup(player: Node3D, text: String, color: Color) -> void:
 	effects.add_child(popup)
 
 
-func _remove_bomb_view(cell: Vector2i) -> void:
-	if _bomb_views.has(cell):
-		_bomb_views[cell].queue_free()
-		_bomb_views.erase(cell)
+func _remove_bomb_view(id: int) -> void:
+	if _bomb_views.has(id):
+		_bomb_views[id].queue_free()
+		_bomb_views.erase(id)
+
+
+func _living_player_at(cell: Vector2i) -> bool:
+	for player in players:
+		if player and player.alive and player.get_cell() == cell:
+			return true
+	return false
 
 
 ## WebGL compiles a shader the first time it is drawn, which stalls that frame. Draw one bomb and

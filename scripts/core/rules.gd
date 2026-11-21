@@ -67,6 +67,20 @@ const VEST_TICKS := 16 * TICKS_PER_SECOND
 ## The vest flickers this long before it runs out.
 const VEST_WARNING_TICKS := 3 * TICKS_PER_SECOND
 
+## --- Moving bombs (Kick, Punch) --- all VERIFY against Generation
+## A kicked bomb slides this many cells per second.
+const KICK_SPEED := 8.0
+## A punched bomb flies this many cells, over anything in between.
+const PUNCH_DISTANCE := 3
+const PUNCH_FLIGHT_TICKS := 24
+## When a punched bomb lands on a taken cell it bounces one cell further.
+const BOUNCE_FLIGHT_TICKS := 10
+## Peak height of a punched bomb's arc, in cells.
+const PUNCH_ARC_HEIGHT := 1.6
+## Two kicked bombs colliding merge into a Dangerous Bomb: fuse and square blast radius.
+const DANGEROUS_FUSE_TICKS := 120
+const DANGEROUS_RADIUS := 2
+
 
 static func ticks_to_seconds(ticks: int) -> float:
 	return ticks / float(TICKS_PER_SECOND)
