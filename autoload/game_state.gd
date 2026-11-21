@@ -4,6 +4,10 @@ extends Node
 
 ## Colour and ready flag per slot, kept across matches so a rematch keeps everyone's choices.
 var lobby := LobbyState.new()
+## Match parameters from the lobby settings panel; saved with save_settings().
+var settings := MatchSettings.load_or_default()
+## Where save_settings() writes (tests point this elsewhere).
+var settings_path := MatchSettings.SAVE_PATH
 ## The stage to play. Phase 1 has one.
 var level: LevelData = preload("res://levels/classic.tres")
 ## True when the lobby set up the match (no drop-in join phase; results screen afterwards).
@@ -25,6 +29,12 @@ func color_of(slot: int) -> Color:
 
 func color_name(slot: int) -> String:
 	return Palette.PLAYER_COLOR_NAMES[color_index(slot)]
+
+
+func save_settings() -> void:
+	var error := settings.save(settings_path)
+	if error != OK:
+		push_warning("Could not save settings (error %d)" % error)
 
 
 ## Back to a clean slate (main menu): nobody joined, no session.

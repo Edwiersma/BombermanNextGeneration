@@ -17,16 +17,16 @@ signal slots_changed
 const MAX_SLOTS := 4
 const STICK_DEADZONE := 0.5
 
-const ACTIONS := [&"up", &"down", &"left", &"right", &"bomb", &"special", &"back", &"start"]
+const ACTIONS := [&"up", &"down", &"left", &"right", &"bomb", &"special", &"back", &"start", &"menu"]
 
 const KEYBOARD_LAYOUTS := {
 	"kb0": {
 		&"up": KEY_W, &"down": KEY_S, &"left": KEY_A, &"right": KEY_D,
-		&"bomb": KEY_SPACE, &"special": KEY_E, &"back": KEY_ESCAPE, &"start": KEY_TAB,
+		&"bomb": KEY_SPACE, &"special": KEY_E, &"back": KEY_ESCAPE, &"start": KEY_TAB, &"menu": KEY_Q,
 	},
 	"kb1": {
 		&"up": KEY_UP, &"down": KEY_DOWN, &"left": KEY_LEFT, &"right": KEY_RIGHT,
-		&"bomb": KEY_ENTER, &"special": KEY_SHIFT, &"back": KEY_BACKSPACE, &"start": KEY_P,
+		&"bomb": KEY_ENTER, &"special": KEY_SHIFT, &"back": KEY_BACKSPACE, &"start": KEY_P, &"menu": KEY_DELETE,
 	},
 }
 
@@ -35,7 +35,7 @@ const KEYBOARD_LABELS := {
 	"kb1": "Keyboard (Arrows + Enter)",
 }
 
-## PlayStation layout: Cross = bomb, Circle = special / back, Options = start.
+## PlayStation layout: Cross = bomb, Circle = special / back, Options = start, Triangle = menu.
 ## Godot maps the browser's "standard" gamepad layout onto these JoyButton values.
 const PAD_BUTTONS := {
 	&"up": [JOY_BUTTON_DPAD_UP],
@@ -46,6 +46,7 @@ const PAD_BUTTONS := {
 	&"special": [JOY_BUTTON_B],
 	&"back": [JOY_BUTTON_B],
 	&"start": [JOY_BUTTON_START],
+	&"menu": [JOY_BUTTON_Y],
 }
 
 ## Sony USB product ids, as they appear in the browser's gamepad id string.

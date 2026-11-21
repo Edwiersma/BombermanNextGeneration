@@ -6,7 +6,7 @@ A local-multiplayer versus game in the style of **Bomberman Generations** (GameC
 
 ## Status
 **Phase 1** (local multiplayer, base mechanics) is playable: main menu, 4-player lobby, Bomberman-style movement, bombs and chain reactions, rounds with a clock and sudden death, results and rematch. Remaining for Phase 1: a full 4-controller browser playtest.
-**Phase 2**: power-ups, match settings, real art and sound, more stages.
+**Phase 2** (in progress): match settings (done: wins needed, round time, sudden death, starting bombs and fire), then the Bomberman Generation battle items: stat items, Heart, Safety Vest, Kick, Punch, Gloves, Line Bomb, Remote, Piercing, Power Bomb, Land Mine, Bouncy Bomb and curses.
 
 ## Play it locally
 Requires Godot 4.7.1 with its export templates, and Python 3 for the local web server.
@@ -22,7 +22,7 @@ Then open **http://localhost:8060/** in Chrome or Firefox. Use `localhost`, not 
 
 You can also open this folder in the Godot editor and press F5.
 
-**Flow:** main menu → VERSUS → lobby (join on your own device, pick a colour with left/right, ready up) → START → match (first to 3 round wins; Start pauses) → results (rematch / lobby / main menu). A single ready player gets a practice match.
+**Flow:** main menu → VERSUS → lobby (join on your own device, pick a colour with left/right, ready up; any player can open the match settings) → START → match (first to 3 round wins; Start pauses) → results (rematch / lobby / main menu). A single ready player gets a practice match.
 
 ## Controls
 | | Keyboard 1 | Keyboard 2 | PlayStation pad |
@@ -31,10 +31,11 @@ You can also open this folder in the Godot editor and press F5.
 | Bomb · join · ready · select | Space | Enter | Cross |
 | Back · un-ready · leave | Esc | Backspace | Circle |
 | Start · pause | Tab | P | Options |
+| Match settings (lobby) | Q | Delete | Triangle |
 | Special (Phase 2) | E | Shift | Circle |
 
 ## Rules (Phase 1)
-13 × 11 arena with pillars and brick walls. Bombs (1 at a time, fire range 2) explode after 3 s in a cross, destroy the first brick in each direction and set off other bombs in the same instant. Fire kills, including your own. Last player standing wins the round; at 1:00 left, **HURRY UP!** blocks fall in a spiral and crush anything below. The full spec, including which numbers still need checking against the original, is kept with the project plan; all tunable numbers are in [`scripts/core/rules.gd`](scripts/core/rules.gd).
+13 × 11 arena with pillars and brick walls. Bombs (1 at a time, fire range 2 by default) explode after 3 s in a cross, destroy the first brick in each direction and set off other bombs in the same instant. Fire kills, including your own. Last player standing wins the round; at 1:00 left, **HURRY UP!** blocks fall in a spiral and crush anything below. Wins needed (1-5), round time (1:00-5:00 or no limit), sudden death and starting bombs/fire are match settings, saved in the browser. The full spec, including which numbers still need checking against the original, is kept with the project plan; all tunable numbers are in [`scripts/core/rules.gd`](scripts/core/rules.gd).
 
 ## Project layout
 ```

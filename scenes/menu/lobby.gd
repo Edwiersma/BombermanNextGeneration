@@ -4,13 +4,17 @@ extends Control
 ##   Colour:            left / right (until ready)
 ##   Back:              un-ready, then leave; with nobody joined, back to the main menu
 ##   Start:             begin once everyone joined is ready (1 player = practice)
+##   Menu:              match settings (Triangle / Q / Delete), driven by whoever opened it
 
 const CORNERS := ["top-left", "top-right", "bottom-left", "bottom-right"]
+const SettingsPanel := preload("res://scenes/menu/settings_panel.gd")
 const JOIN_TEXT := "Press Cross / Space / Enter\nto join"
 
 var _lobby: LobbyState
 var _cards: Array[Dictionary] = []
 var _prompt: Label
+var _summary: Label
+var _settings_panel: Control
 var _starting := false  # START accepted; ignore further presses until the match loads
 
 
@@ -52,6 +56,10 @@ func _sync_with_router() -> void:
 func _on_action(device: String, action: StringName) -> void:
 	if _starting:
 		return
+	if _settings_panel.visible:
+		if device == _settings_panel.owner_device:
+			_settings_panel.handle(action)
+		return
 	var slot := InputRouter.slot_of(device)
 	if slot == -1:
 		if action == &"bomb":
@@ -75,6 +83,9 @@ func _on_action(device: String, action: StringName) -> void:
 				else:
 					_lobby.leave(slot)
 					InputRouter.release_slot(slot)
+			&"menu":
+				_settings_panel.open(device, GameState.settings)
+				return
 			&"start":
 				if _lobby.can_start():
 					_starting = true
@@ -96,7 +107,8 @@ func _build_ui() -> void:
 	add_child(column)
 
 	column.add_child(UI.title("VERSUS", 64))
-	column.add_child(UI.label("Stage: %s      First to %d wins" % [GameState.level.display_name, Rules.WINS_TO_WIN], 24, UI.DIM))
+	_summary = UI.label("", 24, UI.DIM)
+	column.add_child(_summary)
 
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -109,7 +121,31 @@ func _build_ui() -> void:
 
 	_prompt = UI.label("", 34, UI.ACCENT, 8)
 	column.add_child(_prompt)
-	column.add_child(UI.label("Colour: Left / Right      Back: Circle / Esc / Backspace      Start: Options / Tab / P", 18, UI.DIM, 4))
+	column.add_child(UI.label("Colour: Left / Right      Back: Circle / Esc / Backspace      Start: Options / Tab / P      Settings: Triangle / Q / Delete", 18, UI.DIM, 4))
+
+	_settings_panel = SettingsPanel.new()
+	add_child(_settings_panel)
+	_settings_panel.closed.connect(_on_settings_closed)
+
+
+func _on_settings_closed(changed: bool) -> void:
+	if changed:
+		GameState.save_settings()
+		_lobby.unready_all()  # everyone agrees to the new rules again
+	_refresh()
+
+
+func _settings_summary() -> String:
+	var s := GameState.settings
+	var parts: Array[String] = [
+		"Stage: %s" % GameState.level.display_name,
+		"First to %d" % s.wins_to_win,
+		"Time %s" % s.value_text("round_seconds"),
+		"Sudden death %s" % s.value_text("sudden_death").to_lower(),
+	]
+	if s.start_bombs != Rules.START_BOMBS or s.start_fire != Rules.START_FIRE:
+		parts.append("Start %d bomb%s / fire %d" % [s.start_bombs, "" if s.start_bombs == 1 else "s", s.start_fire])
+	return "      ".join(parts)
 
 
 func _make_card(slot: int) -> Dictionary:
@@ -147,6 +183,7 @@ func _make_card(slot: int) -> Dictionary:
 
 
 func _refresh() -> void:
+	_summary.text = _settings_summary()
 	for slot in _cards.size():
 		var card: Dictionary = _cards[slot]
 		if _lobby.is_joined(slot):

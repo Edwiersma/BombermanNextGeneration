@@ -72,6 +72,13 @@ func die() -> void:
 	_death_tween.chain().tween_callback(hide)
 
 
+## Starting stats for a round (items picked up last round are gone).
+func reset_stats(settings: MatchSettings) -> void:
+	max_bombs = settings.start_bombs
+	fire_range = settings.start_fire
+	speed = Rules.PLAYER_SPEED
+
+
 ## Back to life at `cell`, e.g. at the start of every round.
 func respawn(cell: Vector2i) -> void:
 	if _death_tween:

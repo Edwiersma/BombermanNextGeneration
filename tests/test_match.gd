@@ -7,7 +7,8 @@ const INTRO := Rules.INTRO_ROUND_TICKS + Rules.INTRO_READY_TICKS
 
 
 ## A match with players in `slots`, already past the intro of round 1.
-func _playing(slots: Array[int]) -> Node3D:
+func _playing(slots: Array[int], settings := MatchSettings.new()) -> Node3D:
+	GameState.settings = settings  # never the player's saved settings
 	var match_node: Node3D = MATCH_SCENE.instantiate()
 	match_node.allow_drop_in = false
 	match_node.leave_on_finish = false
@@ -180,4 +181,30 @@ func test_death_on_last_end_delay_tick_is_a_draw() -> void:
 	_run(m, 1)
 	check(not m.players[0].alive, "survivor died this tick")
 	check_eq(m.rules.round_winner, -1, "counted as a draw, not a win")
+	m.free()
+
+
+func test_starting_stats_come_from_settings() -> void:
+	var settings := MatchSettings.new()
+	settings.start_bombs = 2
+	settings.start_fire = 4
+	var m := _playing([0], settings)
+	var p: Node3D = m.players[0]
+	check_eq([p.max_bombs, p.fire_range], [2, 4], "stats applied")
+	m.try_place_bomb(p)
+	p.grid_pos = Vector2(2, 1)
+	m.try_place_bomb(p)
+	check_eq(m.bombs.bomb_count(0), 2, "two bombs allowed")
+	GameState.settings = MatchSettings.new()
+	m.free()
+
+
+func test_wins_needed_from_settings() -> void:
+	var settings := MatchSettings.new()
+	settings.wins_to_win = 1
+	var m := _playing([0, 1], settings)
+	m.try_place_bomb(m.players[1])
+	_run(m, Rules.BOMB_FUSE_TICKS + Rules.ROUND_END_DELAY_TICKS + Rules.ROUND_OVER_TICKS)
+	check_eq(m.rules.state, MatchRules.State.MATCH_OVER, "one win ends the match")
+	GameState.settings = MatchSettings.new()
 	m.free()

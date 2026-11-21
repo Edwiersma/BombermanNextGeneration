@@ -7,8 +7,9 @@ extends RefCounted
 ##
 ## - A round ends when at most one player is left (none in solo practice), after a short delay
 ##   during which play continues. One survivor wins the round; nobody left is a draw.
-## - The clock runs only while PLAYING. With SUDDEN_DEATH_AT_TICKS left, blocks start falling in
+## - The clock runs only while PLAYING. With `sudden_death_at` ticks left, blocks start falling in
 ##   a spiral from the edge inward. When the clock hits 0 with several players alive: draw.
+##   round_ticks = 0 means no time limit (and so no sudden death).
 ## - Draws award nothing. First to `wins_to_win` round wins takes the match.
 
 signal round_started(round_number: int)  # intro begins: show "ROUND n"
@@ -24,10 +25,10 @@ signal match_finished                    # result shown long enough; back to WAI
 
 enum State { WAITING, INTRO, PLAYING, ROUND_OVER, MATCH_OVER }
 
-# Tunable per match (Phase 2 match parameters).
+# Tunable per match; see configure().
 var wins_to_win := Rules.WINS_TO_WIN
-var round_ticks := Rules.ROUND_TICKS
-var sudden_death_at := Rules.SUDDEN_DEATH_AT_TICKS
+var round_ticks := Rules.ROUND_TICKS          # 0 = no time limit
+var sudden_death_at := Rules.SUDDEN_DEATH_AT_TICKS  # -1 = never
 
 var state := State.WAITING
 var round_number := 0
@@ -46,6 +47,16 @@ var _spiral: Array[Vector2i] = []
 var _spiral_index := 0
 var _next_drop := 0
 var _falling := {}        # Vector2i -> ticks until it lands
+
+
+func configure(settings: MatchSettings) -> void:
+	wins_to_win = settings.wins_to_win
+	round_ticks = settings.round_ticks()
+	sudden_death_at = settings.sudden_death_at_ticks()
+
+
+func has_time_limit() -> bool:
+	return round_ticks > 0
 
 
 func begin_match(slots: Array[int]) -> void:
@@ -108,9 +119,10 @@ func tick() -> void:
 
 
 func _tick_playing() -> void:
-	time_left = maxi(time_left - 1, 0)
+	if has_time_limit():
+		time_left = maxi(time_left - 1, 0)
 
-	if not sudden_death and time_left <= sudden_death_at:
+	if not sudden_death and sudden_death_at >= 0 and has_time_limit() and time_left <= sudden_death_at:
 		sudden_death = true
 		_next_drop = 0
 		hurry_up.emit()
@@ -125,7 +137,7 @@ func _tick_playing() -> void:
 		if _end_delay <= 0:
 			var winner := alive[0] if alive.size() == 1 and participants.size() >= 2 else -1
 			_finish_round(winner)
-	elif time_left == 0:
+	elif has_time_limit() and time_left == 0:
 		_finish_round(-1)
 
 

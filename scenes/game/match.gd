@@ -82,7 +82,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(_delta: float) -> void:
-	hud.set_time(rules.time_left, rules.sudden_death)
+	hud.set_time(rules.time_left if rules.has_time_limit() else -1, rules.sudden_death)
 	if debug_label.visible:
 		var lines: Array[String] = ["FPS %d   physics ticks %d   state %s   (F3 hides)" % [
 			Engine.get_frames_per_second(), _ticks, MatchRules.State.keys()[rules.state]]]
@@ -151,6 +151,7 @@ func _begin_match() -> void:
 	var slots := _joined_slots()
 	if slots.is_empty():
 		return
+	rules.configure(GameState.settings)
 	rules.begin_match(slots)
 	hud.setup_players(slots)
 	hud.show_clock(true)
@@ -162,6 +163,7 @@ func _start_round() -> void:
 	_build_arena()
 	for slot in rules.participants:
 		players[slot].respawn(grid.spawns[slot])
+		players[slot].reset_stats(GameState.settings)
 		hud.set_alive(slot, true)
 	_set_input(false)
 	hud.set_wins(rules.wins)

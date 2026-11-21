@@ -156,3 +156,38 @@ func test_spiral_covers_interior_once() -> void:
 	check_eq(cells[12], Vector2i(13, 1), "runs along the top first")
 	# 13x11 leaves a 3-cell strip through the middle as the last ring.
 	check_eq(cells.slice(-3), [Vector2i(6, 6), Vector2i(7, 6), Vector2i(8, 6)] as Array[Vector2i], "ends in the middle strip")
+
+
+func test_no_time_limit_never_times_out() -> void:
+	var settings := MatchSettings.new()
+	settings.round_seconds = 0
+	var rules := MatchRules.new()
+	rules.configure(settings)
+	rules.begin_match([0, 1] as Array[int])
+	rules.start_round(grid_from_rows(ROOM))
+	_ticks(rules, INTRO + Rules.ROUND_TICKS + 600)
+	check(rules.is_playing(), "still playing long after 3:00")
+	check(not rules.sudden_death, "no sudden death without a clock")
+
+
+func test_sudden_death_can_be_turned_off() -> void:
+	var settings := MatchSettings.new()
+	settings.sudden_death = false
+	var rules := _rules([0, 1])
+	rules.configure(settings)
+	rules.start_round(grid_from_rows(ROOM))
+	_ticks(rules, INTRO + Rules.ROUND_TICKS - 10)
+	check(not rules.sudden_death and "block_falling" not in _names(), "no blocks fall")
+	_ticks(rules, 10)
+	check_eq(_last("round_ended"), -1, "time up is still a draw")
+
+
+func test_configure_applies_wins_needed() -> void:
+	var settings := MatchSettings.new()
+	settings.wins_to_win = 1
+	var rules := _rules([0, 1])
+	rules.configure(settings)
+	_ticks(rules, INTRO)
+	rules.player_died(1)
+	_ticks(rules, Rules.ROUND_END_DELAY_TICKS + Rules.ROUND_OVER_TICKS)
+	check_eq(_last("match_ended"), 0, "first win takes the match")

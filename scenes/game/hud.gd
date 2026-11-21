@@ -45,9 +45,13 @@ func show_clock(visible_now: bool) -> void:
 	_bar.visible = visible_now or not _badges.is_empty()
 
 
+## ticks < 0 means the round has no time limit.
 func set_time(ticks: int, hurry: bool) -> void:
-	var seconds := ceili(ticks / float(Rules.TICKS_PER_SECOND))
-	_clock.text = "%d:%02d" % [seconds / 60, seconds % 60]
+	if ticks < 0:
+		_clock.text = "--:--"
+	else:
+		var seconds := ceili(ticks / float(Rules.TICKS_PER_SECOND))
+		_clock.text = "%d:%02d" % [seconds / 60, seconds % 60]
 	_hurry = hurry
 	var color := HURRY_COLOR if hurry else Color.WHITE
 	if hurry and fmod(Time.get_ticks_msec() / 1000.0, 0.5) < 0.25:
