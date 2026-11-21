@@ -17,6 +17,14 @@ To use the real assets, junction your local asset folder: `New-Item -ItemType Ju
   .\tools\serve.ps1
   ```
   Then open http://localhost:8060/ in Chrome or Firefox. Use `localhost`, not a LAN IP: browsers only expose gamepads on secure origins.
+- **Dev scenes:** add `?scene=controller_test` to the URL (or `-- --scene=controller_test` on the command line) to open the pad tester.
+- **Tests:**
+  ```powershell
+  & "C:\Program Files\Godot\4.7.1\Godot_v4.7.1-stable_win64_console.exe" --headless --path . -s tests/run_tests.gd
+  ```
+
+## Levels
+Levels are ASCII in `levels/*.tres` (`#` hard, `+` soft, `?` random soft, `.` floor, `1`-`4` spawns). See `scripts/levels/level_data.gd`.
 
 ## Controls
 | | Keyboard 1 | Keyboard 2 | PlayStation pad |

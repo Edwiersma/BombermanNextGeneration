@@ -11,12 +11,13 @@ config_version=5
 [application]
 
 config/name="Bomberman Next Generation"
-run/main_scene="res://scenes/debug/controller_test.tscn"
+run/main_scene="res://scenes/boot.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
 
 InputRouter="*res://autoload/input_router.gd"
+AssetLibrary="*res://autoload/asset_library.gd"
 
 [display]
 

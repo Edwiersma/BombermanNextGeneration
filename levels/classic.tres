@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="LevelData" format=3]
+
+[ext_resource type="Script" path="res://scripts/levels/level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Classic"
+layout = PackedStringArray("###############", "#1..+..+..+..2#", "#.#+#+#+#+#+#.#", "#....++.++....#", "#.#+#+#.#+#+#.#", "#..+++++++++..#", "#+#.#+#+#+#.#+#", "#..+++++++++..#", "#.#+#+#.#+#+#.#", "#....++.++....#", "#.#+#+#+#+#+#.#", "#3..+..+..+..4#", "###############")
+random_soft_chance = 0.0
