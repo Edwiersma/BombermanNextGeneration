@@ -16,14 +16,7 @@ const CORNER_ROWS := [
 
 
 func _grid(rows: Array) -> Grid:
-	var grid := Grid.new(rows[0].length(), rows.size())
-	for y in rows.size():
-		for x in rows[y].length():
-			if rows[y][x] == "#":
-				grid.set_cell(Vector2i(x, y), Grid.Cell.HARD)
-			elif rows[y][x] == "+":
-				grid.set_cell(Vector2i(x, y), Grid.Cell.SOFT)
-	return grid
+	return grid_from_rows(rows)
 
 
 func _step(grid: Grid, pos: Vector2, dirs: Array[Vector2i], distance: float) -> Dictionary:

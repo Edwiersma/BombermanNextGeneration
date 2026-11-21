@@ -4,7 +4,19 @@ extends SceneTree
 ## Exit code is the number of failed tests.
 
 
-func _initialize() -> void:
+var _done := false
+
+
+## Runs on the first frame rather than in _initialize, so the tree is live and nodes added by
+## integration tests get _ready like in the game.
+func _process(_delta: float) -> bool:
+	if not _done:
+		_done = true
+		_run_all()
+	return false
+
+
+func _run_all() -> void:
 	var passed := 0
 	var failed := 0
 	var files := Array(DirAccess.get_files_at("res://tests"))

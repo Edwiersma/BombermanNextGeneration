@@ -36,4 +36,4 @@ Levels are ASCII in `levels/*.tres` (`#` hard, `+` soft, `?` random soft, `.` fl
 
 Browsers hide pads until a button is pressed on each one.
 
-Until the lobby exists, players join a running match by pressing **Cross / Space / Enter**. **F3** toggles the debug readout (FPS, physics ticks, player positions).
+Until the lobby exists, players join a running match by pressing **Cross / Space / Enter**, and a dead player respawns with **Options / Tab / P**. **F3** toggles the debug readout (FPS, physics ticks, player positions).

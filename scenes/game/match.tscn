@@ -32,6 +32,8 @@ script = ExtResource("3")
 
 [node name="Players" type="Node3D" parent="."]
 
+[node name="Effects" type="Node3D" parent="."]
+
 [node name="Hud" type="CanvasLayer" parent="."]
 
 [node name="Hint" type="Label" parent="Hud"]

@@ -38,6 +38,16 @@ func get_bounds() -> AABB:
 	return AABB(Vector3(-0.5, 0.0, -0.5), Vector3(grid.width, WALL_HEIGHT, grid.height))
 
 
+## A brick was hit: crumble it over the burn time. It is removed when the grid cell empties.
+func burn_block(cell: Vector2i) -> void:
+	var block: Node3D = _soft_blocks.get(cell)
+	if block == null:
+		return
+	var tween := block.create_tween()
+	tween.tween_property(block, "scale", Vector3(0.7, 0.25, 0.7), Rules.ticks_to_seconds(Rules.FLAME_TICKS)) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+
 func _add_cell_visual(cell: Vector2i) -> void:
 	var cell_type := grid.get_cell(cell)
 	if cell_type == Grid.Cell.HARD:

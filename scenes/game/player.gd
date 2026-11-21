@@ -3,6 +3,8 @@ extends Node3D
 ## Position lives in `grid_pos` (cells); the node's transform only mirrors it, interpolated
 ## between ticks so motion is smooth on displays faster than 60 Hz.
 
+signal died(player: Node3D)
+
 const DIRECTION_ACTIONS := {
 	&"up": Vector2i.UP,
 	&"down": Vector2i.DOWN,
@@ -11,6 +13,7 @@ const DIRECTION_ACTIONS := {
 }
 const TURN_SPEED := 18.0  # radians per second for the visual turn
 const BOB_HEIGHT := 0.05
+const DEATH_TIME := 0.9
 
 var slot := -1
 var device := ""
@@ -18,14 +21,19 @@ var color := Color.WHITE
 var grid_pos := Vector2.ZERO
 var facing := Vector2i.DOWN
 var speed := Rules.PLAYER_SPEED
+var max_bombs := Rules.START_BOMBS
+var fire_range := Rules.START_FIRE
+var alive := true
 var input_enabled := true
 
-var _world: Node  # must provide is_blocked_for(player, cell: Vector2i) -> bool
+## Must provide is_blocked_for(player, cell: Vector2i) -> bool and try_place_bomb(player).
+var _world: Node
 var _previous_pos := Vector2.ZERO  # grid_pos at the previous tick, for interpolation
 var _held_dirs: Array[Vector2i] = []  # most recently pressed first
 var _model: Node3D
 var _moving := false
 var _walk_time := 0.0
+var _death_tween: Tween
 
 
 func setup(world: Node, player_slot: int, player_device: String, player_color: Color, spawn: Vector2i) -> void:
@@ -49,8 +57,42 @@ func get_cell() -> Vector2i:
 	return GridMovement.nearest_cell(grid_pos)
 
 
+func die() -> void:
+	if not alive:
+		return
+	alive = false
+	_moving = false
+	_previous_pos = grid_pos
+	died.emit(self)
+	# Spin and squash flat, then disappear.
+	_death_tween = create_tween().set_parallel(true)
+	_death_tween.tween_property(_model, "rotation:y", _model.rotation.y + TAU * 2.0, DEATH_TIME)
+	var squash := _death_tween.tween_property(_model, "scale", Vector3(1.4, 0.05, 1.4), DEATH_TIME)
+	squash.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	_death_tween.chain().tween_callback(hide)
+
+
+## Dev only until rounds exist (M5): bring a dead player back at a cell.
+func respawn(cell: Vector2i) -> void:
+	if _death_tween:
+		_death_tween.kill()
+	alive = true
+	grid_pos = Vector2(cell)
+	_previous_pos = grid_pos
+	facing = Vector2i.DOWN
+	_model.scale = Vector3.ONE
+	_model.rotation = Vector3.ZERO
+	show()
+
+
 func _on_action_pressed(device_id: String, action: StringName) -> void:
-	if device_id != device or not DIRECTION_ACTIONS.has(action):
+	if device_id != device:
+		return
+	if action == &"bomb":
+		if alive and input_enabled:
+			_world.try_place_bomb(self)
+		return
+	if not DIRECTION_ACTIONS.has(action):
 		return
 	var dir: Vector2i = DIRECTION_ACTIONS[action]
 	_held_dirs.erase(dir)
@@ -59,6 +101,8 @@ func _on_action_pressed(device_id: String, action: StringName) -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_held_dirs()
+	if not alive:
+		return
 	var dirs: Array[Vector2i] = _held_dirs if input_enabled else ([] as Array[Vector2i])
 	var result := GridMovement.step(grid_pos, dirs, speed * delta, _is_blocked)
 	_moving = result.dir != Vector2i.ZERO
@@ -70,6 +114,8 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_sync_transform(Engine.get_physics_interpolation_fraction())
+	if not alive:
+		return
 	var target_angle := atan2(float(facing.x), float(facing.y))
 	_model.rotation.y = rotate_toward(_model.rotation.y, target_angle, TURN_SPEED * delta)
 	if _moving:
