@@ -36,6 +36,6 @@ Levels are ASCII in `levels/*.tres` (`#` hard, `+` soft, `?` random soft, `.` fl
 
 Browsers hide pads until a button is pressed on each one.
 
-Until the lobby exists, the match opens in a **join phase**: press **Cross / Space / Enter** to join, then **Options / Tab / P** to start (1 player = practice). After a match it returns there.
+**Flow:** main menu -> VERSUS -> lobby (join on your own device, pick a colour with left/right, ready up) -> START -> match (first to 3 round wins; Start pauses) -> results (rematch / lobby / main menu). One ready player alone gets a practice match.
 
-Dev keys: **F3** toggles the debug readout (FPS, ticks, state, positions); **F4** skips the clock to just before sudden death.
+**Dev:** `?scene=match` opens a match directly in a join phase (join with Cross / Space / Enter, start with Options / Tab / P). Dev keys: **F3** toggles the debug readout (FPS, ticks, state, positions); **F4** skips the clock to just before sudden death.

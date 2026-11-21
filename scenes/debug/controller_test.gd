@@ -3,6 +3,7 @@ extends Control
 ## and lets devices join/leave the 4 player slots the way the lobby will.
 ##   Join:  Cross / Space / Enter
 ##   Leave: Circle / Esc / Backspace
+##   Main menu: Options / Tab / P
 
 const PAD_BUTTON_NAMES := {
 	JOY_BUTTON_A: "Cross",
@@ -75,7 +76,7 @@ func _build_ui() -> void:
 
 	var help := Label.new()
 	help.text = "Browsers hide controllers until a button is pressed: press any button on every pad.\n" \
-		+ "Join a slot: Cross / Space / Enter.   Leave: Circle / Esc / Backspace."
+		+ "Join a slot: Cross / Space / Enter.   Leave: Circle / Esc / Backspace.   Main menu: Options / Tab / P."
 	help.modulate = Color(1, 1, 1, 0.8)
 	vbox.add_child(help)
 
@@ -211,6 +212,9 @@ func _dir_name(dir: Vector2i) -> String:
 # --- Events ------------------------------------------------------------------
 
 func _on_action_pressed(device: String, action: StringName) -> void:
+	if action == &"start":
+		Scenes.go(Scenes.MENU)
+		return
 	var slot := InputRouter.slot_of(device)
 	if action == &"bomb" and slot == -1:
 		var new_slot := InputRouter.assign_slot(device)

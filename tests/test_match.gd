@@ -10,6 +10,7 @@ const INTRO := Rules.INTRO_ROUND_TICKS + Rules.INTRO_READY_TICKS
 func _playing(slots: Array[int]) -> Node3D:
 	var match_node: Node3D = MATCH_SCENE.instantiate()
 	match_node.allow_drop_in = false
+	match_node.leave_on_finish = false
 	match_node.rng_seed = 1
 	(Engine.get_main_loop() as SceneTree).root.add_child(match_node)
 	for slot in slots:
@@ -123,4 +124,27 @@ func test_falling_block_crushes_player_and_bomb() -> void:
 	check_eq(m.grid.get_cell(Vector2i(3, 1)), Grid.Cell.HARD, "cell is now solid")
 	check(not m.bombs.has_bomb(Vector2i(3, 1)), "bomb crushed without exploding")
 	check(not p.alive, "player crushed")
+	m.free()
+
+
+func test_finished_match_records_results() -> void:
+	var m := _playing([0, 1])
+	for round in Rules.WINS_TO_WIN:
+		m.try_place_bomb(m.players[1])  # black blows itself up every round
+		_run(m, Rules.BOMB_FUSE_TICKS + Rules.ROUND_END_DELAY_TICKS + Rules.ROUND_OVER_TICKS)
+		if round < Rules.WINS_TO_WIN - 1:
+			_run(m, INTRO)
+	check_eq(m.rules.state, MatchRules.State.MATCH_OVER, "match over")
+	_run(m, Rules.MATCH_OVER_TICKS)
+	check_eq(GameState.last_results, {"wins": {0: 3, 1: 0}, "winner": 0, "rounds": 3}, "results stored")
+	m.free()
+
+
+func test_lobby_colours_reach_the_players() -> void:
+	GameState.lobby.join(0)
+	GameState.lobby.cycle_color(0, 1)  # white -> black
+	var m := _playing([0])
+	check_eq(m.players[0].color, Palette.PLAYER_COLORS[1], "player uses the lobby colour")
+	check_eq(m._player_name(0), "BLACK", "announced by colour name")
+	GameState.lobby.reset()
 	m.free()

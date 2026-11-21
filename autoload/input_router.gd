@@ -68,8 +68,17 @@ var _held := {}  # device id -> {action: bool}
 var _latched := {}  # device id -> {action: true}
 
 
+## Godot's built-in UI actions. Menus are driven through this router instead (MenuNavigator),
+## so these are cleared to stop arrow keys / Enter / pad buttons acting twice.
+const GODOT_UI_ACTIONS := [&"ui_accept", &"ui_select", &"ui_cancel", &"ui_up", &"ui_down",
+	&"ui_left", &"ui_right", &"ui_focus_next", &"ui_focus_prev"]
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	for action in GODOT_UI_ACTIONS:
+		if InputMap.has_action(action):
+			InputMap.action_erase_events(action)
 	slots.resize(MAX_SLOTS)
 	slots.fill("")
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)

@@ -7,13 +7,17 @@ extends Node3D
 const PLAYER_SCENE := preload("res://scenes/game/player.tscn")
 const BombView := preload("res://scenes/game/bomb_view.gd")
 const ExplosionView := preload("res://scenes/game/explosion_view.gd")
+const PauseMenu := preload("res://scenes/game/pause_menu.gd")
 
 @export var level: LevelData = preload("res://levels/classic.tres")
 ## Fixed seed for '?' cells; 0 picks a new random layout every round.
 @export var rng_seed := 0
-## Until the lobby exists (M6) the match opens in a join phase: devices join with bomb and
-## start begins the match; afterwards it returns there. Off = start at once with joined slots.
+## Dev mode when the match is opened directly (?scene=match): it opens in a join phase where
+## devices join with bomb and start begins, and returns there afterwards. Matches set up by the
+## lobby (GameState.in_session) turn this off: they start at once and end on the results screen.
 @export var allow_drop_in := true
+## Go to the results screen when a lobby match is over. Tests turn this off.
+@export var leave_on_finish := true
 
 var grid: Grid
 var bombs: BombField
@@ -23,6 +27,7 @@ var players: Array = []  # Player node or null, indexed by slot
 var _rng := RandomNumberGenerator.new()
 var _bomb_views := {}  # Vector2i -> BombView
 var _ticks := 0
+var _pause_menu: CanvasLayer
 
 @onready var arena: Node3D = $Arena
 @onready var camera: Camera3D = $Camera
@@ -34,6 +39,10 @@ var _ticks := 0
 
 
 func _ready() -> void:
+	if GameState.in_session:
+		allow_drop_in = false
+		level = GameState.level
+	arena.show_spawn_markers = allow_drop_in
 	if rng_seed != 0:
 		_rng.seed = rng_seed
 	else:
@@ -50,7 +59,16 @@ func _ready() -> void:
 			_spawn_player(slot, device)
 	InputRouter.action_pressed.connect(_on_action_pressed)
 	debug_label.visible = allow_drop_in
+	_pause_menu = PauseMenu.new()
+	_pause_menu.resume_requested.connect(_resume)
+	_pause_menu.quit_requested.connect(func(): Scenes.go(Scenes.LOBBY))
+	add_child(_pause_menu)
 	_enter_join_phase()
+
+
+func _exit_tree() -> void:
+	if InputRouter.action_pressed.is_connected(_on_action_pressed):
+		InputRouter.action_pressed.disconnect(_on_action_pressed)
 
 
 func _physics_process(_delta: float) -> void:
@@ -107,7 +125,7 @@ func _connect_rules() -> void:
 	rules.round_ended.connect(_on_round_ended)
 	rules.next_round.connect(_start_round)
 	rules.match_ended.connect(_on_match_ended)
-	rules.match_finished.connect(_enter_join_phase)
+	rules.match_finished.connect(_on_match_finished)
 
 
 func _enter_join_phase() -> void:
@@ -158,11 +176,36 @@ func _on_round_ended(winner: int) -> void:
 	if winner == -1:
 		hud.announce("DRAW")
 	else:
-		hud.announce("%s WINS!" % _player_name(winner), 0.0, Palette.PLAYER_COLORS[winner])
+		hud.announce("%s WINS!" % _player_name(winner), 0.0, GameState.color_of(winner))
 
 
 func _on_match_ended(winner: int) -> void:
-	hud.announce("%s WINS THE MATCH!" % _player_name(winner), 0.0, Palette.PLAYER_COLORS[winner])
+	hud.announce("%s WINS THE MATCH!" % _player_name(winner), 0.0, GameState.color_of(winner))
+
+
+func _on_match_finished() -> void:
+	GameState.last_results = {
+		"wins": rules.wins.duplicate(),
+		"winner": rules.match_winner,
+		"rounds": rules.round_number,
+	}
+	if allow_drop_in:
+		_enter_join_phase()
+	elif leave_on_finish:
+		Scenes.go(Scenes.RESULTS)
+
+
+func _toggle_pause() -> void:
+	if get_tree().paused:
+		_resume()
+	else:
+		get_tree().paused = true
+		_pause_menu.open()
+
+
+func _resume() -> void:
+	_pause_menu.close()
+	get_tree().paused = false
 
 
 ## Sudden death: the block lands, crushing whatever is in the cell.
@@ -216,13 +259,16 @@ func _joined_slots() -> Array[int]:
 
 
 func _player_name(slot: int) -> String:
-	return String(Palette.PLAYER_COLOR_NAMES[slot]).to_upper()
+	return GameState.color_name(slot).to_upper()
 
 
 func _on_action_pressed(device: String, action: StringName) -> void:
+	var slot := InputRouter.slot_of(device)
+	if action == &"start" and slot != -1 and rules.state in [MatchRules.State.INTRO, MatchRules.State.PLAYING]:
+		_toggle_pause()
+		return
 	if not allow_drop_in or rules.state != MatchRules.State.WAITING:
 		return
-	var slot := InputRouter.slot_of(device)
 	if action == &"bomb" and slot == -1:
 		slot = InputRouter.assign_slot(device)
 		if slot != -1:
@@ -240,7 +286,7 @@ func _spawn_player(slot: int, device: String) -> void:
 		push_error("Level has no spawn for slot %d" % slot)
 		return
 	var player := PLAYER_SCENE.instantiate()
-	player.setup(self, slot, device, Palette.PLAYER_COLORS[slot], spawn)
+	player.setup(self, slot, device, GameState.color_of(slot), spawn)
 	player.input_enabled = false
 	player.died.connect(_on_player_died)
 	players_root.add_child(player)

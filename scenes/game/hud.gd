@@ -109,7 +109,7 @@ func _make_badge(slot: int) -> Dictionary:
 	row.add_theme_constant_override("separation", 8)
 
 	var head_style := StyleBoxFlat.new()
-	head_style.bg_color = Palette.PLAYER_COLORS[slot]
+	head_style.bg_color = GameState.color_of(slot)
 	head_style.set_corner_radius_all(16)
 	head_style.set_border_width_all(3)
 	head_style.border_color = Color(0, 0, 0, 0.8)

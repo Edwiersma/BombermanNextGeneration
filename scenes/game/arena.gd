@@ -7,7 +7,7 @@ const SOFT_HEIGHT := 0.85
 const BLOCK_SIZE := 0.98      # small gap so neighbouring blocks read as separate
 const OUTSIDE_SIZE := 81      # odd, so outside tiles line up with cell edges
 
-## Coloured discs on the spawn cells, until players exist (M3).
+## Coloured discs on the spawn cells (shown in the dev join phase).
 @export var show_spawn_markers := true
 
 var grid: Grid
@@ -141,7 +141,7 @@ func _add_spawn_markers() -> void:
 		mesh.bottom_radius = 0.35
 		mesh.height = 0.03
 		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Palette.PLAYER_COLORS[slot]
+		mat.albedo_color = GameState.color_of(slot)
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mesh.material = mat
 		var marker := MeshInstance3D.new()
