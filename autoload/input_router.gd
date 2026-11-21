@@ -48,6 +48,15 @@ const PAD_BUTTONS := {
 	&"start": [JOY_BUTTON_START],
 }
 
+## Sony USB product ids, as they appear in the browser's gamepad id string.
+const SONY_PRODUCTS := {
+	"0ce6": "DualSense",
+	"0df2": "DualSense Edge",
+	"05c4": "DualShock 4",
+	"09cc": "DualShock 4",
+	"0ba0": "DualShock 4 (wireless adapter)",
+}
+
 ## Slot index -> device id ("" = free). A disconnected pad keeps its slot so it
 ## gets its player back when it reconnects.
 var slots: Array[String] = []
@@ -121,9 +130,26 @@ func is_connected_device(device: String) -> bool:
 func device_label(device: String) -> String:
 	if is_pad(device):
 		var id := pad_index(device)
-		var pad_name := Input.get_joy_name(id) if is_connected_device(device) else "disconnected"
-		return "Pad %d: %s" % [id, pad_name]
+		var label := pad_model(id) if is_connected_device(device) else "disconnected"
+		return "Pad %d: %s" % [id, label]
 	return KEYBOARD_LABELS.get(device, device)
+
+
+## Human-readable pad model. On the web Godot reports every pad as
+## "Standard Gamepad Mapping", so read the browser's own id string instead.
+func pad_model(id: int) -> String:
+	var raw := Input.get_joy_name(id)
+	if OS.has_feature("web"):
+		var browser_id = JavaScriptBridge.eval(
+			"(function(){var p=navigator.getGamepads()[%d];return p?p.id:'';})()" % id)
+		if browser_id is String and browser_id != "":
+			raw = browser_id
+	var lower := raw.to_lower()
+	if "054c" in lower:
+		for product in SONY_PRODUCTS:
+			if product in lower:
+				return SONY_PRODUCTS[product]
+	return raw
 
 
 func is_held(device: String, action: StringName) -> bool:

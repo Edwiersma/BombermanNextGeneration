@@ -225,7 +225,7 @@ func _on_action_pressed(device: String, action: StringName) -> void:
 
 func _on_joy_connection_changed(device: int, connected: bool) -> void:
 	if connected:
-		_add_log("Pad %d connected: %s" % [device, Input.get_joy_name(device)])
+		_add_log("Pad %d connected: %s" % [device, InputRouter.pad_model(device)])
 	else:
 		_add_log("Pad %d disconnected" % device)
 
