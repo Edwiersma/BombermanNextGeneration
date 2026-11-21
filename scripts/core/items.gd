@@ -4,7 +4,7 @@ extends RefCounted
 ## this build supports (only those can be hidden under bricks or toggled in settings).
 ## Items are saved by `key`, so the enum order can grow without breaking saved settings.
 
-enum Type { BOMB_UP, FIRE_UP, FULL_FIRE, SPEED_UP, SPEED_DOWN }
+enum Type { BOMB_UP, FIRE_UP, FULL_FIRE, SPEED_UP, SPEED_DOWN, HEART, VEST }
 
 const NONE := -1
 
@@ -15,9 +15,12 @@ const INFO := {
 	Type.FULL_FIRE: {"key": "full_fire", "name": "Full Fire", "symbol": "FF", "weight": 1, "color": Color(0.9, 0.12, 0.1)},
 	Type.SPEED_UP: {"key": "speed_up", "name": "Speed Up", "symbol": "S+", "weight": 6, "color": Color(0.2, 0.8, 0.3)},
 	Type.SPEED_DOWN: {"key": "speed_down", "name": "Speed Down", "symbol": "S-", "weight": 2, "color": Color(0.5, 0.3, 0.6)},
+	Type.HEART: {"key": "heart", "name": "Heart", "symbol": "H", "weight": 3, "color": Color(1.0, 0.35, 0.55)},
+	Type.VEST: {"key": "safety_vest", "name": "Safety Vest", "symbol": "V", "weight": 1, "color": Color(0.2, 0.85, 0.95)},
 }
 
-const IMPLEMENTED := [Type.BOMB_UP, Type.FIRE_UP, Type.FULL_FIRE, Type.SPEED_UP, Type.SPEED_DOWN]
+const IMPLEMENTED := [Type.BOMB_UP, Type.FIRE_UP, Type.FULL_FIRE, Type.SPEED_UP, Type.SPEED_DOWN,
+	Type.HEART, Type.VEST]
 
 
 static func key(type: int) -> String:

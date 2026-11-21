@@ -60,6 +60,13 @@ const SPEED_STEP := 0.6
 ## Share of bricks hiding an item for each item-frequency setting (off, low, normal, high). VERIFY
 const ITEM_SHARE := [0.0, 0.2, 0.35, 0.55]
 
+## Heart: after it absorbs a hit you are invulnerable this long, to get out of the fire. VERIFY
+const HEART_GRACE_TICKS := 120
+## Safety Vest: invulnerable for 16 s (Generation).
+const VEST_TICKS := 16 * TICKS_PER_SECOND
+## The vest flickers this long before it runs out.
+const VEST_WARNING_TICKS := 3 * TICKS_PER_SECOND
+
 
 static func ticks_to_seconds(ticks: int) -> float:
 	return ticks / float(TICKS_PER_SECOND)

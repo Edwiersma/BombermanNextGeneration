@@ -64,8 +64,10 @@ func reveal(cell: Vector2i) -> void:
 		_hidden.erase(cell)
 
 
-## Puts an item on the floor (revealed, or scattered from a dead player).
+## Puts an item on the floor (revealed, or scattered from a dead player). An item already there
+## is replaced (and reported removed, so its view goes too).
 func place(cell: Vector2i, item: int) -> void:
+	_remove(cell, Removed.CRUSHED)
 	_items[cell] = item
 	item_revealed.emit(cell, item)
 

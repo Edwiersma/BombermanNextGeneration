@@ -197,3 +197,54 @@ func test_item_settings_save_and_load() -> void:
 	check(loaded.equals(s), "round trip")
 	check(not loaded.is_item_enabled(Items.Type.FULL_FIRE), "toggle kept")
 	DirAccess.remove_absolute(path)
+
+
+# --- Heart and Safety Vest -----------------------------------------------------
+
+func test_heart_absorbs_one_hit_then_grace() -> void:
+	var stats := PlayerStats.new()
+	stats.apply(Items.Type.HEART)
+	check(not stats.take_hit(), "heart saves you")
+	check(not stats.has_heart, "heart used up")
+	check(stats.is_invulnerable(), "grace period")
+	check(not stats.take_hit(), "still in fire during grace: fine")
+	for i in Rules.HEART_GRACE_TICKS:
+		stats.tick()
+	check(not stats.is_invulnerable(), "grace over")
+	check(stats.take_hit(), "next hit kills")
+
+
+func test_only_one_heart_at_a_time() -> void:
+	var stats := PlayerStats.new()
+	stats.apply(Items.Type.HEART)
+	stats.apply(Items.Type.HEART)
+	check(not stats.take_hit(), "first hit absorbed")
+	for i in Rules.HEART_GRACE_TICKS:
+		stats.tick()
+	check(stats.take_hit(), "a second heart did not stack")
+
+
+func test_vest_lasts_its_time() -> void:
+	var stats := PlayerStats.new()
+	stats.apply(Items.Type.VEST)
+	for i in Rules.VEST_TICKS - 1:
+		stats.tick()
+	check(not stats.take_hit(), "protected until the last tick")
+	stats.tick()
+	check(stats.take_hit(), "vest worn off")
+
+
+func test_vest_does_not_use_up_the_heart() -> void:
+	var stats := PlayerStats.new()
+	stats.apply(Items.Type.HEART)
+	stats.apply(Items.Type.VEST)
+	check(not stats.take_hit(), "vest takes the hit")
+	check(stats.has_heart, "heart kept for later")
+
+
+func test_protection_resets_each_round() -> void:
+	var stats := PlayerStats.new()
+	stats.apply(Items.Type.HEART)
+	stats.apply(Items.Type.VEST)
+	stats.reset(MatchSettings.new())
+	check(not stats.has_heart and stats.vest_ticks == 0 and not stats.is_invulnerable(), "gone")

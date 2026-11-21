@@ -33,6 +33,8 @@ var _model: Node3D
 var _moving := false
 var _walk_time := 0.0
 var _death_tween: Tween
+var _heart_marker: Node3D        # shown while carrying a Heart
+var _vest_bubble: MeshInstance3D  # shown while the Safety Vest lasts
 
 
 func setup(world: Node, player_slot: int, player_device: String, player_color: Color, spawn: Vector2i) -> void:
@@ -48,6 +50,7 @@ func setup(world: Node, player_slot: int, player_device: String, player_color: C
 func _ready() -> void:
 	_model = _build_model()
 	add_child(_model)
+	_build_protection_visuals()
 	_sync_transform(1.0)
 	InputRouter.action_pressed.connect(_on_action_pressed)
 
@@ -60,6 +63,9 @@ func die() -> void:
 	if not alive:
 		return
 	alive = false
+	_heart_marker.visible = false
+	_vest_bubble.visible = false
+	_model.visible = true
 	_moving = false
 	_previous_pos = grid_pos
 	died.emit(self)
@@ -86,6 +92,7 @@ func respawn(cell: Vector2i) -> void:
 	facing = Vector2i.DOWN
 	_model.scale = Vector3.ONE
 	_model.rotation = Vector3.ZERO
+	_model.visible = true
 	show()
 
 
@@ -120,6 +127,7 @@ func _process(delta: float) -> void:
 	_sync_transform(Engine.get_physics_interpolation_fraction())
 	if not alive:
 		return
+	_update_protection_visuals(delta)
 	var target_angle := atan2(float(facing.x), float(facing.y))
 	_model.rotation.y = rotate_toward(_model.rotation.y, target_angle, TURN_SPEED * delta)
 	if _moving:
@@ -154,6 +162,54 @@ func _is_blocked(cell: Vector2i) -> bool:
 func _sync_transform(fraction: float) -> void:
 	var shown := _previous_pos.lerp(grid_pos, fraction)
 	position = Vector3(shown.x, 0.0, shown.y)
+
+
+# --- Protection visuals --------------------------------------------------------------
+
+func _build_protection_visuals() -> void:
+	_heart_marker = Node3D.new()
+	_heart_marker.position.y = 1.32
+	var diamond := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE * 0.16
+	diamond.mesh = box
+	diamond.rotation_degrees = Vector3(45, 0, 45)
+	var heart_mat := StandardMaterial3D.new()
+	heart_mat.albedo_color = Items.color(Items.Type.HEART)
+	heart_mat.emission_enabled = true
+	heart_mat.emission = Items.color(Items.Type.HEART) * 0.6
+	diamond.material_override = heart_mat
+	_heart_marker.add_child(diamond)
+	_heart_marker.visible = false
+	add_child(_heart_marker)
+
+	_vest_bubble = MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.56
+	sphere.height = 1.12
+	_vest_bubble.mesh = sphere
+	var vest_mat := StandardMaterial3D.new()
+	vest_mat.albedo_color = Color(Items.color(Items.Type.VEST), 0.28)
+	vest_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	vest_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	vest_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_vest_bubble.material_override = vest_mat
+	_vest_bubble.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_vest_bubble.position.y = 0.5
+	_vest_bubble.visible = false
+	add_child(_vest_bubble)
+
+
+func _update_protection_visuals(delta: float) -> void:
+	var now := Time.get_ticks_msec()
+	_heart_marker.visible = stats.has_heart
+	_heart_marker.rotation.y += delta * 3.0
+	var vest_on := stats.vest_ticks > 0
+	var vest_ending := stats.vest_ticks < Rules.VEST_WARNING_TICKS
+	_vest_bubble.visible = vest_on and (not vest_ending or (now / 120) % 2 == 0)
+	_vest_bubble.scale = Vector3.ONE * (1.0 + 0.04 * sin(now / 150.0))
+	# Blink while a lost Heart's grace period protects us.
+	_model.visible = stats.grace_ticks <= 0 or (now / 90) % 2 == 0
 
 
 # --- Placeholder model ---------------------------------------------------------------

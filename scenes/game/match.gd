@@ -33,6 +33,7 @@ var _item_views := {}  # Vector2i -> ItemView
 var _ticks := 0
 var _pause_menu: CanvasLayer
 var _pause_changed_frame := -1  # physics frame of the last pause/resume, to act once per frame
+var _dev_item_index := 0        # F5 in dev matches cycles through item types
 
 @onready var arena: Node3D = $Arena
 @onready var camera: Camera3D = $Camera
@@ -80,6 +81,9 @@ func _physics_process(_delta: float) -> void:
 	_ticks += 1
 	# Bombs and deaths first, so the rules see this tick's deaths before deciding the round.
 	if rules.is_playing():
+		for player in players:
+			if player and player.alive:
+				player.stats.tick()
 		bombs.tick()
 		_check_deaths()
 		_check_pickups()
@@ -106,6 +110,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.physical_keycode == KEY_F4 and allow_drop_in and rules.is_playing():
 		# Dev: skip the clock to 2 s before sudden death.
 		rules.time_left = mini(rules.time_left, rules.sudden_death_at + 2 * Rules.TICKS_PER_SECOND)
+	elif event.physical_keycode == KEY_F5 and allow_drop_in and rules.is_playing():
+		_dev_give_next_item()
+
+
+## Dev: drop the next item type at the first living player's feet (picked up next tick).
+func _dev_give_next_item() -> void:
+	for player in players:
+		if player and player.alive:
+			var item: int = Items.IMPLEMENTED[_dev_item_index % Items.IMPLEMENTED.size()]
+			_dev_item_index += 1
+			items.place(player.get_cell(), item)
+			return
 
 
 ## Movement collision: can `player` enter `cell`? A player standing on a bomb can still walk off
@@ -242,10 +258,15 @@ func _on_block_landed(cell: Vector2i) -> void:
 			player.die()
 
 
+## Fire hits go through the player's protection (Heart, Safety Vest).
 func _check_deaths() -> void:
 	for player in players:
 		if player and player.alive and bombs.has_flame(player.get_cell()):
-			player.die()
+			var had_heart: bool = player.stats.has_heart
+			if player.stats.take_hit():
+				player.die()
+			elif had_heart and not player.stats.has_heart:
+				_show_popup(player, "HEART LOST!", Items.color(Items.Type.HEART))
 
 
 func _check_pickups() -> void:
@@ -375,8 +396,12 @@ func _on_item_removed(cell: Vector2i, _item: int, _reason: int) -> void:
 
 
 func _show_pickup(player: Node3D, item: int) -> void:
+	_show_popup(player, Items.display_name(item).to_upper() + "!", Items.color(item).lightened(0.3))
+
+
+func _show_popup(player: Node3D, text: String, color: Color) -> void:
 	var popup := PickupPopup.new()
-	popup.setup(Items.display_name(item).to_upper() + "!", Items.color(item).lightened(0.3))
+	popup.setup(text, color)
 	popup.position = player.position
 	effects.add_child(popup)
 

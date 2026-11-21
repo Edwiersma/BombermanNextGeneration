@@ -279,3 +279,31 @@ func test_items_reset_each_round() -> void:
 	m._start_round()
 	check_eq(p.stats.max_bombs, Rules.START_BOMBS, "back to starting stats")
 	m.free()
+
+
+func test_heart_saves_player_from_own_bomb() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.HEART)
+	m.try_place_bomb(p)
+	_run(m, Rules.BOMB_FUSE_TICKS)
+	check(p.alive, "survived the blast")
+	check(not p.stats.has_heart, "heart spent")
+	_run(m, Rules.FLAME_TICKS)  # still standing in the lingering fire, inside the grace period
+	check(p.alive, "survived the lingering fire")
+	m.try_place_bomb(p)
+	_run(m, Rules.BOMB_FUSE_TICKS)
+	check(not p.alive, "no second save")
+	m.free()
+
+
+func test_vest_survives_blasts_but_not_crush() -> void:
+	var m := _playing([0, 1])
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.VEST)
+	m.try_place_bomb(p)
+	_run(m, Rules.BOMB_FUSE_TICKS + 5)
+	check(p.alive, "vest blocks fire")
+	m.rules.block_landed.emit(p.get_cell())
+	check(not p.alive, "a falling block still crushes")
+	m.free()
