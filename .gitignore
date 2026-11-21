@@ -1,0 +1,9 @@
+﻿# Godot
+.godot/
+.import/
+*.translation
+export/
+build/
+# Art/sound live outside the repo (junction to ../assets/export)
+assets_ext/
+*.blend1
