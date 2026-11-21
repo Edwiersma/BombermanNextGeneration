@@ -148,3 +148,36 @@ func test_lobby_colours_reach_the_players() -> void:
 	check_eq(m._player_name(0), "BLACK", "announced by colour name")
 	GameState.lobby.reset()
 	m.free()
+
+
+func test_no_bombs_while_paused() -> void:
+	var m := _playing([0])
+	m._toggle_pause()
+	check(m.get_tree().paused, "paused")
+	m.try_place_bomb(m.players[0])  # e.g. Cross pressed to choose RESUME
+	check_eq(m.bombs.bomb_count(0), 0, "no bomb dropped while paused")
+	m._pause_changed_frame = -1
+	m._resume()
+	check(not m.get_tree().paused, "resumed")
+	m.free()
+
+
+func test_two_pause_presses_in_one_frame_stay_paused() -> void:
+	var m := _playing([0, 1])
+	m._toggle_pause()
+	m._toggle_pause()  # second player, same physics frame
+	check(m.get_tree().paused, "still paused")
+	m._pause_changed_frame = -1
+	m._resume()
+	m.free()
+
+
+func test_death_on_last_end_delay_tick_is_a_draw() -> void:
+	var m := _playing([0, 1])
+	m.players[1].die()
+	m.rules._end_delay = 1  # the round would be decided on the next tick
+	m.bombs._flames[m.players[0].get_cell()] = 5  # survivor is standing in fire
+	_run(m, 1)
+	check(not m.players[0].alive, "survivor died this tick")
+	check_eq(m.rules.round_winner, -1, "counted as a draw, not a win")
+	m.free()

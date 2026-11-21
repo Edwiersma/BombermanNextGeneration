@@ -11,6 +11,7 @@ const JOIN_TEXT := "Press Cross / Space / Enter\nto join"
 var _lobby: LobbyState
 var _cards: Array[Dictionary] = []
 var _prompt: Label
+var _starting := false  # START accepted; ignore further presses until the match loads
 
 
 func _ready() -> void:
@@ -19,18 +20,28 @@ func _ready() -> void:
 	_sync_with_router()
 	_build_ui()
 	InputRouter.action_pressed.connect(_on_action)
-	InputRouter.devices_changed.connect(_refresh)
+	InputRouter.devices_changed.connect(_on_devices_changed)
 	_refresh()
 
 
 func _exit_tree() -> void:
 	InputRouter.action_pressed.disconnect(_on_action)
-	InputRouter.devices_changed.disconnect(_refresh)
+	InputRouter.devices_changed.disconnect(_on_devices_changed)
 
 
-## Keeps lobby choices and InputRouter slots in agreement (e.g. after a dev match).
+func _on_devices_changed() -> void:
+	_sync_with_router()
+	_refresh()
+
+
+## Keeps lobby choices and InputRouter slots in agreement (e.g. after a dev match). A pad that
+## disconnected keeps its slot during a match so it can rejoin, but in the lobby it would block
+## START forever (it can never ready up or leave), so its slot is freed here.
 func _sync_with_router() -> void:
 	for slot in InputRouter.MAX_SLOTS:
+		var device := InputRouter.device_in_slot(slot)
+		if device != "" and not InputRouter.is_connected_device(device):
+			InputRouter.release_slot(slot)
 		var has_device := InputRouter.device_in_slot(slot) != ""
 		if has_device and not _lobby.is_joined(slot):
 			_lobby.join(slot)
@@ -39,6 +50,8 @@ func _sync_with_router() -> void:
 
 
 func _on_action(device: String, action: StringName) -> void:
+	if _starting:
+		return
 	var slot := InputRouter.slot_of(device)
 	if slot == -1:
 		if action == &"bomb":
@@ -64,6 +77,7 @@ func _on_action(device: String, action: StringName) -> void:
 					InputRouter.release_slot(slot)
 			&"start":
 				if _lobby.can_start():
+					_starting = true
 					GameState.in_session = true
 					Scenes.go(Scenes.MATCH)
 					return

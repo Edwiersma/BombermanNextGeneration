@@ -72,7 +72,7 @@ func die() -> void:
 	_death_tween.chain().tween_callback(hide)
 
 
-## Dev only until rounds exist (M5): bring a dead player back at a cell.
+## Back to life at `cell`, e.g. at the start of every round.
 func respawn(cell: Vector2i) -> void:
 	if _death_tween:
 		_death_tween.kill()

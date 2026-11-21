@@ -2,7 +2,7 @@ extends Node3D
 ## Versus match root. Owns the arena, players, bombs and the round flow (MatchRules), and turns
 ## rule signals into scene changes: fresh arena per round, input locks, falling blocks, HUD.
 ##
-## Per physics tick: InputRouter (autoload) -> Match (rules, bombs, deaths) -> Players (movement).
+## Per physics tick: InputRouter (autoload) -> Match (bombs, deaths, then rules) -> Players (movement).
 
 const PLAYER_SCENE := preload("res://scenes/game/player.tscn")
 const BombView := preload("res://scenes/game/bomb_view.gd")
@@ -28,6 +28,7 @@ var _rng := RandomNumberGenerator.new()
 var _bomb_views := {}  # Vector2i -> BombView
 var _ticks := 0
 var _pause_menu: CanvasLayer
+var _pause_changed_frame := -1  # physics frame of the last pause/resume, to act once per frame
 
 @onready var arena: Node3D = $Arena
 @onready var camera: Camera3D = $Camera
@@ -73,10 +74,11 @@ func _exit_tree() -> void:
 
 func _physics_process(_delta: float) -> void:
 	_ticks += 1
-	rules.tick()
+	# Bombs and deaths first, so the rules see this tick's deaths before deciding the round.
 	if rules.is_playing():
 		bombs.tick()
 		_check_deaths()
+	rules.tick()
 
 
 func _process(_delta: float) -> void:
@@ -108,7 +110,8 @@ func is_blocked_for(_player: Node, cell: Vector2i) -> bool:
 
 
 func try_place_bomb(player: Node) -> void:
-	if not rules.is_playing() or bombs.bomb_count(player.slot) >= player.max_bombs:
+	# Input keeps flowing while paused (the pause menu needs it), so check the pause here too.
+	if not rules.is_playing() or get_tree().paused or bombs.bomb_count(player.slot) >= player.max_bombs:
 		return
 	bombs.place_bomb(player.get_cell(), player.slot, player.fire_range)
 
@@ -130,6 +133,9 @@ func _connect_rules() -> void:
 
 func _enter_join_phase() -> void:
 	_set_input(false)
+	if not allow_drop_in:
+		_begin_match()  # lobby match: straight in (it builds its own arena)
+		return
 	_build_arena()
 	for player in players:
 		if player:
@@ -137,11 +143,8 @@ func _enter_join_phase() -> void:
 	hud.show_clock(false)
 	hud.setup_players(_joined_slots())
 	hud.set_wins({})
-	if allow_drop_in:
-		hud.announce("PRESS START" if InputRouter.joined_count() > 0 else "JOIN IN!")
-		_update_hint()
-	else:
-		_begin_match()
+	hud.announce("PRESS START" if InputRouter.joined_count() > 0 else "JOIN IN!")
+	_update_hint()
 
 
 func _begin_match() -> void:
@@ -198,14 +201,25 @@ func _on_match_finished() -> void:
 func _toggle_pause() -> void:
 	if get_tree().paused:
 		_resume()
-	else:
+	elif _claim_pause_change():
 		get_tree().paused = true
 		_pause_menu.open()
 
 
 func _resume() -> void:
-	_pause_menu.close()
-	get_tree().paused = false
+	if _claim_pause_change():
+		_pause_menu.close()
+		get_tree().paused = false
+
+
+## Pause and resume at most once per physics frame, so two players pressing in the same frame
+## (Start + Start, or Start + Cross on RESUME) do not cancel each other out.
+func _claim_pause_change() -> bool:
+	var frame := Engine.get_physics_frames()
+	if frame == _pause_changed_frame:
+		return false
+	_pause_changed_frame = frame
+	return true
 
 
 ## Sudden death: the block lands, crushing whatever is in the cell.
