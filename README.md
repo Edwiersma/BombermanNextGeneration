@@ -6,7 +6,7 @@ A local-multiplayer versus game in the style of **Bomberman Generations** (GameC
 
 ## Status
 **Phase 1** (local multiplayer, base mechanics) is playable: main menu, 4-player lobby, Bomberman-style movement, bombs and chain reactions, rounds with a clock and sudden death, results and rematch. Remaining for Phase 1: a full 4-controller browser playtest.
-**Phase 2** (in progress): match settings (done: wins needed, round time, sudden death, starting bombs and fire), then the Bomberman Generation battle items: stat items, Heart, Safety Vest, Kick, Punch, Gloves, Line Bomb, Remote, Piercing, Power Bomb, Land Mine, Bouncy Bomb and curses.
+**Phase 2** (in progress): match settings and items are in (stat items so far); still to come from the Bomberman Generation battle set: Heart, Safety Vest, Kick, Punch, Gloves, Line Bomb, Remote, Piercing, Power Bomb, Land Mine, Bouncy Bomb and curses.
 
 ## Play it locally
 Requires Godot 4.7.1 with its export templates, and Python 3 for the local web server.
@@ -36,6 +36,19 @@ You can also open this folder in the Godot editor and press F5.
 
 ## Rules (Phase 1)
 13 × 11 arena with pillars and brick walls. Bombs (1 at a time, fire range 2 by default) explode after 3 s in a cross, destroy the first brick in each direction and set off other bombs in the same instant. Fire kills, including your own. Last player standing wins the round; at 1:00 left, **HURRY UP!** blocks fall in a spiral and crush anything below. Wins needed (1-5), round time (1:00-5:00 or no limit), sudden death and starting bombs/fire are match settings, saved in the browser. The full spec, including which numbers still need checking against the original, is kept with the project plan; all tunable numbers are in [`scripts/core/rules.gd`](scripts/core/rules.gd).
+
+## Items
+Items hide under bricks and appear when the brick burns away; walk over one to pick it up. Fire destroys items lying on the floor (and stops there). Each round starts with fresh stats.
+
+| Tile | Item | Effect |
+|---|---|---|
+| B+ | Bomb Up | one more bomb at a time (max 8) |
+| F+ | Fire Up | blast reaches one cell further (max 8) |
+| FF | Full Fire | blast range to the maximum |
+| S+ | Speed Up | walk faster |
+| S- | Speed Down | walk slower |
+
+Match settings choose how often items appear (off / low / normal / high), which items can appear, and whether a fallen player's items scatter across the arena or are lost.
 
 ## Project layout
 ```

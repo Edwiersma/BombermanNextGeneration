@@ -20,9 +20,8 @@ var device := ""
 var color := Color.WHITE
 var grid_pos := Vector2.ZERO
 var facing := Vector2i.DOWN
-var speed := Rules.PLAYER_SPEED
-var max_bombs := Rules.START_BOMBS
-var fire_range := Rules.START_FIRE
+## Bombs, fire, speed and collected items for this round.
+var stats := PlayerStats.new()
 var alive := true
 var input_enabled := true
 
@@ -74,9 +73,7 @@ func die() -> void:
 
 ## Starting stats for a round (items picked up last round are gone).
 func reset_stats(settings: MatchSettings) -> void:
-	max_bombs = settings.start_bombs
-	fire_range = settings.start_fire
-	speed = Rules.PLAYER_SPEED
+	stats.reset(settings)
 
 
 ## Back to life at `cell`, e.g. at the start of every round.
@@ -111,7 +108,7 @@ func _physics_process(delta: float) -> void:
 	if not alive:
 		return
 	var dirs: Array[Vector2i] = _held_dirs if input_enabled else ([] as Array[Vector2i])
-	var result := GridMovement.step(grid_pos, dirs, speed * delta, _is_blocked)
+	var result := GridMovement.step(grid_pos, dirs, stats.speed() * delta, _is_blocked)
 	_moving = result.dir != Vector2i.ZERO
 	if _moving:
 		facing = result.dir
@@ -127,7 +124,7 @@ func _process(delta: float) -> void:
 	_model.rotation.y = rotate_toward(_model.rotation.y, target_angle, TURN_SPEED * delta)
 	if _moving:
 		_walk_time += delta
-		_model.position.y = absf(sin(_walk_time * speed * PI)) * BOB_HEIGHT
+		_model.position.y = absf(sin(_walk_time * stats.speed() * PI)) * BOB_HEIGHT
 	else:
 		_walk_time = 0.0
 		_model.position.y = move_toward(_model.position.y, 0.0, delta)

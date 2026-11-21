@@ -25,6 +25,10 @@ func _run_all() -> void:
 		if not (file.begins_with("test_") and file.ends_with(".gd")) or file == "test_suite.gd":
 			continue
 		var script: GDScript = load("res://tests/" + file)
+		if script == null or not script.can_instantiate():
+			failed += 1  # a file that does not compile must never look like a pass
+			printerr("FAIL %s  could not be loaded (see the error above)" % file)
+			continue
 		for method in script.get_script_method_list():
 			var test_name: String = method.name
 			if not test_name.begins_with("test_"):

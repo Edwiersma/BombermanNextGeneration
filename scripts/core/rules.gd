@@ -47,6 +47,19 @@ const INTRO_READY_TICKS := 60
 const ROUND_OVER_TICKS := 180
 const MATCH_OVER_TICKS := 300
 
+## --- Items (Phase 2) ---
+## Caps from the Generation battle game: 8 bombs, fire 8.
+const MAX_BOMBS := 8
+const MAX_FIRE := 8
+## Speed levels: you start at 1; Speed Up / Speed Down move between 0 and 6. Each level is
+## SPEED_STEP cells/s. VERIFY against Generation.
+const START_SPEED_LEVEL := 1
+const MIN_SPEED_LEVEL := 0
+const MAX_SPEED_LEVEL := 6
+const SPEED_STEP := 0.6
+## Share of bricks hiding an item for each item-frequency setting (off, low, normal, high). VERIFY
+const ITEM_SHARE := [0.0, 0.2, 0.35, 0.55]
+
 
 static func ticks_to_seconds(ticks: int) -> float:
 	return ticks / float(TICKS_PER_SECOND)

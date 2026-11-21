@@ -142,6 +142,7 @@ func _settings_summary() -> String:
 		"First to %d" % s.wins_to_win,
 		"Time %s" % s.value_text("round_seconds"),
 		"Sudden death %s" % s.value_text("sudden_death").to_lower(),
+		"Items %s" % (s.value_text("item_frequency").to_lower() if s.items_active() else "off"),
 	]
 	if s.start_bombs != Rules.START_BOMBS or s.start_fire != Rules.START_FIRE:
 		parts.append("Start %d bomb%s / fire %d" % [s.start_bombs, "" if s.start_bombs == 1 else "s", s.start_fire])

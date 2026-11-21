@@ -8,6 +8,8 @@ const PLAYER_SCENE := preload("res://scenes/game/player.tscn")
 const BombView := preload("res://scenes/game/bomb_view.gd")
 const ExplosionView := preload("res://scenes/game/explosion_view.gd")
 const PauseMenu := preload("res://scenes/game/pause_menu.gd")
+const ItemView := preload("res://scenes/game/item_view.gd")
+const PickupPopup := preload("res://scenes/game/pickup_popup.gd")
 
 @export var level: LevelData = preload("res://levels/classic.tres")
 ## Fixed seed for '?' cells; 0 picks a new random layout every round.
@@ -21,11 +23,13 @@ const PauseMenu := preload("res://scenes/game/pause_menu.gd")
 
 var grid: Grid
 var bombs: BombField
+var items: ItemField
 var rules := MatchRules.new()
 var players: Array = []  # Player node or null, indexed by slot
 
 var _rng := RandomNumberGenerator.new()
 var _bomb_views := {}  # Vector2i -> BombView
+var _item_views := {}  # Vector2i -> ItemView
 var _ticks := 0
 var _pause_menu: CanvasLayer
 var _pause_changed_frame := -1  # physics frame of the last pause/resume, to act once per frame
@@ -78,6 +82,7 @@ func _physics_process(_delta: float) -> void:
 	if rules.is_playing():
 		bombs.tick()
 		_check_deaths()
+		_check_pickups()
 	rules.tick()
 
 
@@ -111,9 +116,9 @@ func is_blocked_for(_player: Node, cell: Vector2i) -> bool:
 
 func try_place_bomb(player: Node) -> void:
 	# Input keeps flowing while paused (the pause menu needs it), so check the pause here too.
-	if not rules.is_playing() or get_tree().paused or bombs.bomb_count(player.slot) >= player.max_bombs:
+	if not rules.is_playing() or get_tree().paused or bombs.bomb_count(player.slot) >= player.stats.max_bombs:
 		return
-	bombs.place_bomb(player.get_cell(), player.slot, player.fire_range)
+	bombs.place_bomb(player.get_cell(), player.slot, player.stats.fire_range)
 
 
 # --- Match flow --------------------------------------------------------------
@@ -161,6 +166,9 @@ func _begin_match() -> void:
 
 func _start_round() -> void:
 	_build_arena()
+	var settings := GameState.settings
+	if settings.items_active():
+		items.hide_items(_rng, settings.item_frequency, settings.enabled_item_types())
 	for slot in rules.participants:
 		players[slot].respawn(grid.spawns[slot])
 		players[slot].reset_stats(GameState.settings)
@@ -227,6 +235,7 @@ func _claim_pause_change() -> bool:
 ## Sudden death: the block lands, crushing whatever is in the cell.
 func _on_block_landed(cell: Vector2i) -> void:
 	bombs.crush(cell)
+	items.crush(cell)
 	grid.set_cell(cell, Grid.Cell.HARD)
 	for player in players:
 		if player and player.alive and player.get_cell() == cell:
@@ -239,9 +248,31 @@ func _check_deaths() -> void:
 			player.die()
 
 
+func _check_pickups() -> void:
+	for player in players:
+		if player and player.alive:
+			var item := items.take(player.get_cell())
+			if item != Items.NONE:
+				player.stats.apply(item)
+				_show_pickup(player, item)
+
+
 func _on_player_died(player: Node) -> void:
 	rules.player_died(player.slot)
 	hud.set_alive(player.slot, false)
+	if rules.is_playing() and GameState.settings.death_items == MatchSettings.DeathItems.SCATTER:
+		items.scatter(player.stats.collected, _rng, _is_free_for_items)
+	player.stats.collected.clear()
+
+
+## Where a dead player's items may land: open floor without a bomb, a flame or a living player.
+func _is_free_for_items(cell: Vector2i) -> bool:
+	if bombs.has_bomb(cell) or bombs.has_flame(cell):
+		return false
+	for player in players:
+		if player and player.alive and player.get_cell() == cell:
+			return false
+	return true
 
 
 # --- Arena, players, effects -------------------------------------------------
@@ -253,11 +284,17 @@ func _build_arena() -> void:
 	for child in effects.get_children():
 		child.queue_free()
 	_bomb_views.clear()
+	_item_views.clear()
+	items = ItemField.new(grid)
+	items.item_revealed.connect(_on_item_revealed)
+	items.item_removed.connect(_on_item_removed)
 	bombs = BombField.new(grid)
+	bombs.items = items
 	bombs.bomb_placed.connect(_on_bomb_placed)
 	bombs.bomb_exploded.connect(_on_bomb_exploded)
 	bombs.bomb_removed.connect(_remove_bomb_view)
 	bombs.block_burning.connect(arena.burn_block)
+	bombs.block_destroyed.connect(items.reveal)
 
 
 func _set_input(enabled: bool) -> void:
@@ -323,6 +360,27 @@ func _on_bomb_exploded(cell: Vector2i, _owner: int, flames: Array) -> void:
 	effects.add_child(view)
 
 
+func _on_item_revealed(cell: Vector2i, item: int) -> void:
+	var view := ItemView.new()
+	view.setup(item)
+	view.position = Grid.cell_to_world(cell)
+	effects.add_child(view)
+	_item_views[cell] = view
+
+
+func _on_item_removed(cell: Vector2i, _item: int, _reason: int) -> void:
+	if _item_views.has(cell):
+		_item_views[cell].queue_free()
+		_item_views.erase(cell)
+
+
+func _show_pickup(player: Node3D, item: int) -> void:
+	var popup := PickupPopup.new()
+	popup.setup(Items.display_name(item).to_upper() + "!", Items.color(item).lightened(0.3))
+	popup.position = player.position
+	effects.add_child(popup)
+
+
 func _remove_bomb_view(cell: Vector2i) -> void:
 	if _bomb_views.has(cell):
 		_bomb_views[cell].queue_free()
@@ -339,13 +397,17 @@ func _warm_up_effects() -> void:
 	var bomb := BombView.new()
 	var boom := ExplosionView.new()
 	boom.setup([{"cell": Vector2i.ZERO, "kind": BombField.Flame.CENTER, "axis": Vector2i.ZERO}], 60.0)
-	for node: Node3D in [bomb, boom]:
+	var item := ItemView.new()
+	var popup := PickupPopup.new()
+	popup.setup("WARM UP", Color.WHITE)
+	for node: Node3D in [bomb, boom, item, popup]:
 		node.position = hidden_spot
 		add_child(node)  # not under Effects, which is cleared when arenas rebuild
 	for i in 3:
 		await get_tree().process_frame
-	bomb.queue_free()
-	boom.queue_free()
+	for node: Node3D in [bomb, boom, item, popup]:
+		if is_instance_valid(node):
+			node.queue_free()
 
 
 func _update_hint() -> void:

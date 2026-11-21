@@ -3,12 +3,14 @@ extends Control
 ## that device's presses to handle()):
 ##   up / down: choose a row     left / right (or bomb): change it
 ##   back / menu: done           bomb on RESET / DONE: do that
-## Rows come from MatchSettings.ROWS, so new settings appear here automatically.
+## Rows come from MatchSettings.rows(), so new settings appear here automatically. The list
+## scrolls to keep the selected row in view.
 
 signal closed(changed: bool)
 
 const RESET := "__reset"
 const DONE := "__done"
+const LIST_HEIGHT := 470
 
 var owner_device := ""
 
@@ -18,6 +20,7 @@ var _rows: Array[String] = []
 var _row_widgets: Array[Dictionary] = []
 var _index := 0
 var _list: VBoxContainer
+var _scroll: ScrollContainer
 
 
 func _ready() -> void:
@@ -42,9 +45,14 @@ func _ready() -> void:
 	panel.add_child(column)
 	column.add_child(UI.title("MATCH SETTINGS", 48))
 
+	_scroll = ScrollContainer.new()
+	_scroll.custom_minimum_size = Vector2(640, LIST_HEIGHT)
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(_scroll)
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 6)
-	column.add_child(_list)
+	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_list)
 
 	column.add_child(UI.label("Up / Down: choose      Left / Right: change      Back / Triangle: done", 16, UI.DIM, 4))
 
@@ -96,7 +104,7 @@ func _build_rows() -> void:
 	for child in _list.get_children():
 		child.queue_free()
 	_row_widgets.clear()
-	_rows.assign(MatchSettings.ROWS)
+	_rows = _settings.rows()
 	_rows.append_array([RESET, DONE])
 	for row in _rows:
 		var style := UI.panel_style(UI.PANEL, 10)
@@ -114,7 +122,7 @@ func _build_rows() -> void:
 		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		line.add_child(value_label)
 		_list.add_child(panel)
-		_row_widgets.append({"style": style, "name": name_label, "value": value_label})
+		_row_widgets.append({"panel": panel, "style": style, "name": name_label, "value": value_label})
 
 
 func _refresh() -> void:
@@ -139,3 +147,4 @@ func _refresh() -> void:
 				widgets.name.text = _settings.row_label(row)
 				var value := _settings.value_text(row)
 				widgets.value.text = "<  %s  >" % value if selected else value
+	_scroll.ensure_control_visible.call_deferred(_row_widgets[_index].panel)

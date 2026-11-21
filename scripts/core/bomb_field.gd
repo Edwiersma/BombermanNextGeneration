@@ -7,6 +7,7 @@ extends RefCounted
 ## - Hard blocks stop it. The first soft block in a direction stops it and starts burning;
 ##   a burning block still stops flames until it is gone (after Rules.FLAME_TICKS).
 ## - A flame that reaches another bomb stops there and that bomb explodes in the same tick.
+## - A flame that reaches an item on the floor burns it and stops there (when `items` is set).
 ## - A bomb sitting in an active flame explodes on the next tick.
 
 signal bomb_placed(cell: Vector2i, owner: int)
@@ -30,6 +31,8 @@ class Bomb:
 
 
 var grid: Grid
+## Optional: floor items that flames burn and stop at.
+var items: ItemField
 
 var _bombs := {}    # Vector2i -> Bomb
 var _flames := {}   # Vector2i -> ticks left
@@ -128,9 +131,12 @@ func _blast(bomb: Bomb) -> Array:
 				break
 			_ignite(cell)
 			var hits_bomb := _bombs.has(cell)
-			var is_tip := dist == bomb.fire_range or hits_bomb or grid.get_cell(cell + dir) == Grid.Cell.HARD
+			var hits_item := items != null and items.has_item(cell)
+			if hits_item:
+				items.burn(cell)
+			var is_tip := dist == bomb.fire_range or hits_bomb or hits_item or grid.get_cell(cell + dir) == Grid.Cell.HARD
 			flames.append(_flame(cell, Flame.END if is_tip else Flame.ARM, dir))
-			if hits_bomb:
+			if hits_bomb or hits_item:
 				break
 	return flames
 

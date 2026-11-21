@@ -20,7 +20,7 @@ func test_step_wraps_around() -> void:
 	check_eq(s.wins_to_win, MatchSettings.MAX_WINS, "1 -> 5")
 	s.start_fire = 1
 	s.step("start_fire", -1)
-	check_eq(s.start_fire, MatchSettings.MAX_START_FIRE, "fire 1 -> 8")
+	check_eq(s.start_fire, Rules.MAX_FIRE, "fire 1 -> 8")
 
 
 func test_round_time_cycles_through_options_including_no_limit() -> void:
@@ -50,7 +50,7 @@ func test_value_texts() -> void:
 	check_eq(s.value_text("round_seconds"), "3:00", "clock")
 	check_eq(s.value_text("sudden_death"), "On", "toggle")
 	check_eq(s.value_text("start_bombs"), "1", "number")
-	for key in MatchSettings.ROWS:
+	for key in s.rows():
 		check(s.row_label(key) != key, "label for %s" % key)
 
 

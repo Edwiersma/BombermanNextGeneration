@@ -190,7 +190,7 @@ func test_starting_stats_come_from_settings() -> void:
 	settings.start_fire = 4
 	var m := _playing([0], settings)
 	var p: Node3D = m.players[0]
-	check_eq([p.max_bombs, p.fire_range], [2, 4], "stats applied")
+	check_eq([p.stats.max_bombs, p.stats.fire_range], [2, 4], "stats applied")
 	m.try_place_bomb(p)
 	p.grid_pos = Vector2(2, 1)
 	m.try_place_bomb(p)
@@ -207,4 +207,75 @@ func test_wins_needed_from_settings() -> void:
 	_run(m, Rules.BOMB_FUSE_TICKS + Rules.ROUND_END_DELAY_TICKS + Rules.ROUND_OVER_TICKS)
 	check_eq(m.rules.state, MatchRules.State.MATCH_OVER, "one win ends the match")
 	GameState.settings = MatchSettings.new()
+	m.free()
+
+
+func test_walking_over_an_item_picks_it_up() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	m.items.place(Vector2i(2, 1), Items.Type.FIRE_UP)
+	p.grid_pos = Vector2(2, 1)
+	_run(m, 1)
+	check_eq(p.stats.fire_range, Rules.START_FIRE + 1, "fire up applied")
+	check(not m.items.has_item(Vector2i(2, 1)), "item gone")
+	check_eq(p.stats.collected, [Items.Type.FIRE_UP] as Array[int], "remembered for scattering")
+	m.free()
+
+
+func test_items_hidden_by_frequency() -> void:
+	var off := MatchSettings.new()
+	off.item_frequency = 0
+	var m := _playing([0], off)
+	check_eq(m.items.hidden_count(), 0, "items off")
+	m.free()
+	var high := MatchSettings.new()
+	high.item_frequency = 3
+	m = _playing([0], high)
+	var bricks: int = m.grid.cells_of(Grid.Cell.SOFT).size()
+	check_eq(m.items.hidden_count(), roundi(bricks * float(Rules.ITEM_SHARE[3])), "high share of bricks")
+	GameState.settings = MatchSettings.new()
+	m.free()
+
+
+func test_dead_players_items_scatter() -> void:
+	var m := _playing([0, 1])
+	var p: Node3D = m.players[1]
+	p.stats.apply(Items.Type.BOMB_UP)
+	p.stats.apply(Items.Type.SPEED_UP)
+	var before: int = m.items.floor_items().size()
+	p.die()
+	var after: Dictionary = m.items.floor_items()
+	check_eq(after.size() - before, 2, "two items scattered")
+	for cell in after:
+		check_eq(m.grid.get_cell(cell), Grid.Cell.EMPTY, "on open floor: %s" % cell)
+	m.free()
+
+
+func test_dead_players_items_lost_when_set() -> void:
+	var settings := MatchSettings.new()
+	settings.death_items = MatchSettings.DeathItems.LOST
+	var m := _playing([0, 1], settings)
+	var p: Node3D = m.players[1]
+	p.stats.apply(Items.Type.BOMB_UP)
+	var before: int = m.items.floor_items().size()
+	p.die()
+	check_eq(m.items.floor_items().size(), before, "nothing scattered")
+	GameState.settings = MatchSettings.new()
+	m.free()
+
+
+func test_sudden_death_block_crushes_floor_item() -> void:
+	var m := _playing([0, 1])
+	m.items.place(Vector2i(5, 3), Items.Type.BOMB_UP)
+	m.rules.block_landed.emit(Vector2i(5, 3))
+	check(not m.items.has_item(Vector2i(5, 3)), "crushed")
+	m.free()
+
+
+func test_items_reset_each_round() -> void:
+	var m := _playing([0, 1])
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.BOMB_UP)
+	m._start_round()
+	check_eq(p.stats.max_bombs, Rules.START_BOMBS, "back to starting stats")
 	m.free()
