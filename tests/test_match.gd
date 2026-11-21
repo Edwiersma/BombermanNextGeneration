@@ -1,15 +1,21 @@
 extends "res://tests/test_suite.gd"
-## Integration tests: the real match scene with players and bombs, ticked by hand.
+## Integration tests: the real match scene with players, bombs and rounds, ticked by hand.
 
 const MATCH_SCENE := preload("res://scenes/game/match.tscn")
 const TICK := 1.0 / Rules.TICKS_PER_SECOND
+const INTRO := Rules.INTRO_ROUND_TICKS + Rules.INTRO_READY_TICKS
 
 
-func _new_match() -> Node3D:
+## A match with players in `slots`, already past the intro of round 1.
+func _playing(slots: Array[int]) -> Node3D:
 	var match_node: Node3D = MATCH_SCENE.instantiate()
 	match_node.allow_drop_in = false
 	match_node.rng_seed = 1
 	(Engine.get_main_loop() as SceneTree).root.add_child(match_node)
+	for slot in slots:
+		match_node._spawn_player(slot, "kb%d" % slot)
+	match_node._begin_match()
+	_run(match_node, INTRO)
 	return match_node
 
 
@@ -21,14 +27,9 @@ func _run(match_node: Node3D, ticks: int) -> void:
 				player._physics_process(TICK)
 
 
-func _player(match_node: Node3D, slot: int) -> Node3D:
-	match_node._spawn_player(slot, "kb%d" % slot)
-	return match_node.players[slot]
-
-
 func test_bomb_kills_player_standing_on_it() -> void:
-	var m := _new_match()
-	var p := _player(m, 0)
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
 	m.try_place_bomb(p)
 	check(m.bombs.has_bomb(Vector2i(1, 1)), "bomb under the player")
 	_run(m, Rules.BOMB_FUSE_TICKS - 1)
@@ -38,9 +39,18 @@ func test_bomb_kills_player_standing_on_it() -> void:
 	m.free()
 
 
+func test_no_bombs_during_intro() -> void:
+	var m := _playing([0])
+	m._start_round()  # back into an intro
+	m.try_place_bomb(m.players[0])
+	check_eq(m.bombs.bomb_count(0), 0, "bomb refused while input is locked")
+	check(not m.players[0].input_enabled, "input locked in intro")
+	m.free()
+
+
 func test_bomb_limit_is_one_at_start() -> void:
-	var m := _new_match()
-	var p := _player(m, 0)
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
 	m.try_place_bomb(p)
 	p.grid_pos = Vector2(2, 1)
 	m.try_place_bomb(p)
@@ -49,21 +59,19 @@ func test_bomb_limit_is_one_at_start() -> void:
 
 
 func test_bomb_blocks_other_players_but_not_its_owner_leaving() -> void:
-	var m := _new_match()
-	var owner := _player(m, 0)
-	var other := _player(m, 1)
-	m.try_place_bomb(owner)
-	check(m.is_blocked_for(other, Vector2i(1, 1)), "bomb cell blocked")
-	# The owner stands on the bomb and can still step off it to the right.
-	var result := GridMovement.step(owner.grid_pos, [Vector2i.RIGHT] as Array[Vector2i], 0.2,
-		func(cell): return m.is_blocked_for(owner, cell))
+	var m := _playing([0, 1])
+	var bomber: Node3D = m.players[0]
+	m.try_place_bomb(bomber)
+	check(m.is_blocked_for(m.players[1], Vector2i(1, 1)), "bomb cell blocked")
+	var result := GridMovement.step(bomber.grid_pos, [Vector2i.RIGHT] as Array[Vector2i], 0.2,
+		func(cell): return m.is_blocked_for(bomber, cell))
 	check(result.pos.x > 1.0, "owner walks off the bomb: %s" % result.pos)
 	m.free()
 
 
 func test_blast_burns_brick_and_frees_the_cell() -> void:
-	var m := _new_match()
-	var p := _player(m, 0)
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
 	p.grid_pos = Vector2(3, 1)  # classic level: brick at (4, 1)
 	m.try_place_bomb(p)
 	p.grid_pos = Vector2(1, 2)  # out of range, around the corner
@@ -76,9 +84,9 @@ func test_blast_burns_brick_and_frees_the_cell() -> void:
 
 
 func test_walking_into_fire_kills() -> void:
-	var m := _new_match()
-	var bomber := _player(m, 0)
-	var victim := _player(m, 1)
+	var m := _playing([0, 1])
+	var bomber: Node3D = m.players[0]
+	var victim: Node3D = m.players[1]
 	bomber.grid_pos = Vector2(10, 3)
 	m.try_place_bomb(bomber)
 	bomber.grid_pos = Vector2(13, 5)
@@ -88,4 +96,31 @@ func test_walking_into_fire_kills() -> void:
 	victim.grid_pos = Vector2(12, 3)  # steps into the flame
 	_run(m, 1)
 	check(not victim.alive, "walked into fire")
+	m.free()
+
+
+func test_round_win_then_fresh_round() -> void:
+	var m := _playing([0, 1])
+	var loser: Node3D = m.players[1]
+	m.try_place_bomb(loser)  # blows itself up at its spawn
+	_run(m, Rules.BOMB_FUSE_TICKS + Rules.ROUND_END_DELAY_TICKS)
+	check_eq(m.rules.state, MatchRules.State.ROUND_OVER, "round decided")
+	check_eq(m.rules.wins, {0: 1, 1: 0}, "white wins the round")
+	_run(m, Rules.ROUND_OVER_TICKS)
+	check_eq(m.rules.round_number, 2, "round 2 started")
+	check(loser.alive and loser.grid_pos == Vector2(m.grid.spawns[1]), "loser back at spawn")
+	check(not loser.input_enabled, "locked during the intro")
+	check_eq(m.bombs.bomb_count(1), 0, "bombs cleared")
+	m.free()
+
+
+func test_falling_block_crushes_player_and_bomb() -> void:
+	var m := _playing([0, 1])
+	var p: Node3D = m.players[0]
+	p.grid_pos = Vector2(3, 1)
+	m.try_place_bomb(p)
+	m.rules.block_landed.emit(Vector2i(3, 1))
+	check_eq(m.grid.get_cell(Vector2i(3, 1)), Grid.Cell.HARD, "cell is now solid")
+	check(not m.bombs.has_bomb(Vector2i(3, 1)), "bomb crushed without exploding")
+	check(not p.alive, "player crushed")
 	m.free()

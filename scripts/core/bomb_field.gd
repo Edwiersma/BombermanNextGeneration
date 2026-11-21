@@ -16,6 +16,8 @@ signal bomb_exploded(cell: Vector2i, owner: int, flames: Array)
 signal block_burning(cell: Vector2i)
 ## A soft block finished burning and is gone. Phase 2: power-ups can appear here.
 signal block_destroyed(cell: Vector2i)
+## A bomb vanished without exploding (crushed by a sudden-death block).
+signal bomb_removed(cell: Vector2i)
 
 enum Flame { CENTER, ARM, END, BLOCK }
 
@@ -74,6 +76,16 @@ func place_bomb(cell: Vector2i, owner: int, fire_range: int) -> bool:
 	_bombs[cell] = bomb
 	bomb_placed.emit(cell, owner)
 	return true
+
+
+## A sudden-death block landed here: the bomb vanishes without exploding and any flame or
+## burning brick in the cell stops.
+func crush(cell: Vector2i) -> void:
+	if _bombs.has(cell):
+		_bombs.erase(cell)
+		bomb_removed.emit(cell)
+	_flames.erase(cell)
+	_burning.erase(cell)
 
 
 func tick() -> void:

@@ -13,6 +13,7 @@ const OUTSIDE_SIZE := 81      # odd, so outside tiles line up with cell edges
 var grid: Grid
 
 var _soft_blocks := {}  # Vector2i -> Node3D
+var _falling := {}      # Vector2i -> Node3D, sudden-death blocks on their way down
 var _meshes := {}
 
 
@@ -22,6 +23,7 @@ func build(new_grid: Grid) -> void:
 	for child in get_children():
 		child.queue_free()
 	_soft_blocks.clear()
+	_falling.clear()
 
 	grid = new_grid
 	_build_ground()
@@ -48,6 +50,16 @@ func burn_block(cell: Vector2i) -> void:
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 
+## Sudden death: a wall block drops from the sky onto `cell`, landing after `seconds`.
+## It becomes the cell's permanent block once the grid turns the cell hard.
+func drop_block(cell: Vector2i, seconds: float) -> void:
+	var block := _add_block(cell, "wall_block", WALL_HEIGHT)
+	block.position.y = 9.0
+	var tween := block.create_tween()
+	tween.tween_property(block, "position:y", 0.0, seconds).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_falling[cell] = block
+
+
 func _add_cell_visual(cell: Vector2i) -> void:
 	var cell_type := grid.get_cell(cell)
 	if cell_type == Grid.Cell.HARD:
@@ -59,11 +71,13 @@ func _add_cell_visual(cell: Vector2i) -> void:
 		_soft_blocks[cell] = _add_block(cell, "soft_block", SOFT_HEIGHT)
 
 
-func _on_cell_changed(cell: Vector2i, old_type: int, _new_type: int) -> void:
-	# M4 replaces the instant removal with a break animation.
+func _on_cell_changed(cell: Vector2i, old_type: int, new_type: int) -> void:
 	if old_type == Grid.Cell.SOFT and _soft_blocks.has(cell):
 		_soft_blocks[cell].queue_free()
 		_soft_blocks.erase(cell)
+	if new_type == Grid.Cell.HARD and _falling.has(cell):
+		_falling.erase(cell)  # the dropped block stays as this cell's visual
+		return
 	_add_cell_visual(cell)
 
 
