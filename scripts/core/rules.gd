@@ -1,0 +1,14 @@
+class_name Rules
+extends RefCounted
+## Gameplay numbers in one place. They become match parameters in Phase 2.
+## Values marked VERIFY are best guesses until checked against Bomberman Generations footage.
+
+## Base walking speed in cells per second. VERIFY
+const PLAYER_SPEED := 4.0
+
+## Minimum sideways overlap (in cells) with the neighbouring lane before a blocked player
+## slides around the corner into it.
+const CORNER_ASSIST_MIN := 0.25
+
+## Largest distance moved in one tick, so a player can never skip past a cell centre.
+const MAX_STEP := 0.45
