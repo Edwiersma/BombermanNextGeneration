@@ -15,6 +15,8 @@ var collected: Array[int] = []
 var has_heart := false
 var has_kick := false   # walk into a bomb to kick it
 var has_punch := false  # special punches the bomb in front
+## Power Glove, Super Power Glove or Line Bomb (one at a time), or Items.NONE.
+var slot_a := Items.NONE
 var vest_ticks := 0   # Safety Vest time left
 var grace_ticks := 0  # invulnerable after a Heart absorbed a hit
 
@@ -28,6 +30,7 @@ func reset(settings: MatchSettings) -> void:
 	has_heart = false
 	has_kick = false
 	has_punch = false
+	slot_a = Items.NONE
 	vest_ticks = 0
 	grace_ticks = 0
 
@@ -51,6 +54,18 @@ func take_hit() -> bool:
 		grace_ticks = Rules.HEART_GRACE_TICKS
 		return false
 	return true
+
+
+func has_glove() -> bool:
+	return slot_a == Items.Type.GLOVE or slot_a == Items.Type.SUPER_GLOVE
+
+
+func has_super_glove() -> bool:
+	return slot_a == Items.Type.SUPER_GLOVE
+
+
+func has_line_bomb() -> bool:
+	return slot_a == Items.Type.LINE_BOMB
 
 
 func speed() -> float:
@@ -77,4 +92,6 @@ func apply(item: int) -> void:
 			has_kick = true
 		Items.Type.PUNCH:
 			has_punch = true
+		Items.Type.GLOVE, Items.Type.SUPER_GLOVE, Items.Type.LINE_BOMB:
+			slot_a = item
 	collected.append(item)

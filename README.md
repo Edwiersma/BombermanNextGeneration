@@ -6,7 +6,7 @@ A local-multiplayer versus game in the style of **Bomberman Generations** (GameC
 
 ## Status
 **Phase 1** (local multiplayer, base mechanics) is playable: main menu, 4-player lobby, Bomberman-style movement, bombs and chain reactions, rounds with a clock and sudden death, results and rematch. Remaining for Phase 1: a full 4-controller browser playtest.
-**Phase 2** (in progress): match settings and items are in (stat items, Heart, Safety Vest, Kick, Punch so far); still to come from the Bomberman Generation battle set: Gloves, Line Bomb, Remote, Piercing, Power Bomb, Land Mine, Bouncy Bomb and curses.
+**Phase 2** (in progress): match settings and items are in (stat items, Heart, Safety Vest, Kick, Punch, Gloves, Line Bomb so far); still to come from the Bomberman Generation battle set: Remote, Piercing, Power Bomb, Land Mine, Bouncy Bomb and curses.
 
 ## Play it locally
 Requires Godot 4.7.1 with its export templates, and Python 3 for the local web server.
@@ -51,6 +51,11 @@ Items hide under bricks and appear when the brick burns away; walk over one to p
 | V | Safety Vest | invulnerable to fire for 16 s |
 | K | Bomb Kick | walk into a bomb to send it sliding until something stops it |
 | P | Bomb Punch | press Special to punch the bomb in front 3 cells, over anything; it wraps around the arena edge |
+| G | Power Glove | standing on your bomb, hold Bomb to lift and carry it; release to throw it 4 cells |
+| SG | Super Power Glove | like the Power Glove; hold the bomb for 2 s and it becomes a Dangerous Bomb |
+| L | Line Bomb | standing on the bomb you just placed, press Bomb again to lay a line of your remaining bombs |
+
+Power Glove, Super Power Glove and Line Bomb share one slot: picking up one replaces the others.
 
 Two kicked bombs that collide merge into a glowing red **Dangerous Bomb**, which explodes in a 5 × 5 square.
 

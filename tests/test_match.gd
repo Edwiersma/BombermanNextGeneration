@@ -349,3 +349,73 @@ func test_kicked_bomb_stops_before_another_player() -> void:
 	other.grid_pos = Vector2(4, 3)
 	check(not m.try_kick(kicker, Vector2i.RIGHT), "player right behind the bomb: no room")
 	m.free()
+
+
+func test_power_glove_lift_carry_throw() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.GLOVE)
+	p.grid_pos = Vector2(1, 3)
+	m.try_place_bomb(p)           # place
+	m.try_place_bomb(p)           # press again on it: lift
+	check(p.is_carrying(), "carrying")
+	check(not m.bombs.has_bomb(Vector2i(1, 3)), "off the grid")
+	m.try_place_bomb(p)           # hands full: nothing
+	check_eq(m.bombs.bomb_count(0), 1, "no second bomb while carrying")
+	p.facing = Vector2i.RIGHT
+	m.release_bomb(p)
+	check(not p.is_carrying(), "thrown")
+	check_eq(m.bombs.flying_count(), 1, "in the air")
+	m.free()
+
+
+func test_without_glove_pressing_on_own_bomb_does_nothing() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	m.try_place_bomb(p)
+	m.try_place_bomb(p)
+	check(not p.is_carrying() and m.bombs.has_bomb(p.get_cell()), "bomb stays, no lift")
+	m.free()
+
+
+func test_super_glove_charges_into_dangerous_bomb() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.SUPER_GLOVE)
+	m.try_place_bomb(p)
+	m.try_place_bomb(p)
+	_run(m, Rules.SUPER_GLOVE_CHARGE_TICKS - 1)
+	check(not m.bombs.is_carried_dangerous(p.carried_bomb), "not yet")
+	_run(m, 1)
+	check(m.bombs.is_carried_dangerous(p.carried_bomb), "charged")
+	m.free()
+
+
+func test_line_bomb_uses_remaining_bombs() -> void:
+	var settings := MatchSettings.new()
+	settings.start_bombs = 4
+	var m := _playing([0], settings)
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.LINE_BOMB)
+	p.grid_pos = Vector2(1, 3)    # classic row 3: open from x=1 to x=4
+	p.facing = Vector2i.RIGHT
+	m.try_place_bomb(p)
+	m.try_place_bomb(p)
+	check_eq(m.bombs.bomb_count(0), 4, "all four bombs out")
+	for x in [1, 2, 3, 4]:
+		check(m.bombs.has_bomb(Vector2i(x, 3)), "bomb at (%d, 3)" % x)
+	GameState.settings = MatchSettings.new()
+	m.free()
+
+
+func test_dying_while_carrying_drops_the_bomb() -> void:
+	var m := _playing([0, 1])
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.GLOVE)
+	m.try_place_bomb(p)
+	m.try_place_bomb(p)
+	var cell: Vector2i = p.get_cell()
+	p.die()
+	check(not p.is_carrying(), "let go")
+	check(m.bombs.has_bomb(cell), "dropped where they fell")
+	m.free()

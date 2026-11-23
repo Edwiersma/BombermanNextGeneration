@@ -81,6 +81,15 @@ const PUNCH_ARC_HEIGHT := 1.6
 const DANGEROUS_FUSE_TICKS := 120
 const DANGEROUS_RADIUS := 2
 
+## --- Slot A (Power Glove, Super Power Glove, Line Bomb) --- VERIFY against Generation
+## A thrown bomb flies this many cells (like a punch, over anything, wrapping at the edge).
+const THROW_DISTANCE := 4
+const THROW_FLIGHT_TICKS := 30
+## Holding a bomb this long with the Super Power Glove makes it a Dangerous Bomb.
+const SUPER_GLOVE_CHARGE_TICKS := 120
+## How high a carried bomb sits above the player, in cells.
+const CARRY_HEIGHT := 1.15
+
 
 static func ticks_to_seconds(ticks: int) -> float:
 	return ticks / float(TICKS_PER_SECOND)

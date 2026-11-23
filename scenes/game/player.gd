@@ -24,9 +24,12 @@ var facing := Vector2i.DOWN
 var stats := PlayerStats.new()
 var alive := true
 var input_enabled := true
+## Id of the bomb held overhead with a Power Glove, or -1; and for how many ticks.
+var carried_bomb := -1
+var carry_ticks := 0
 
-## Must provide is_blocked_for(player, cell), try_place_bomb(player), try_kick(player, dir) and
-## try_punch(player).
+## Must provide is_blocked_for(player, cell), try_place_bomb(player), release_bomb(player),
+## try_kick(player, dir) and try_punch(player).
 var _world: Node
 var _previous_pos := Vector2.ZERO  # grid_pos at the previous tick, for interpolation
 var _held_dirs: Array[Vector2i] = []  # most recently pressed first
@@ -54,6 +57,7 @@ func _ready() -> void:
 	_build_protection_visuals()
 	_sync_transform(1.0)
 	InputRouter.action_pressed.connect(_on_action_pressed)
+	InputRouter.action_released.connect(_on_action_released)
 
 
 func get_cell() -> Vector2i:
@@ -94,7 +98,18 @@ func respawn(cell: Vector2i) -> void:
 	_model.scale = Vector3.ONE
 	_model.rotation = Vector3.ZERO
 	_model.visible = true
+	carried_bomb = -1
+	carry_ticks = 0
 	show()
+
+
+func is_carrying() -> bool:
+	return carried_bomb != -1
+
+
+func _on_action_released(device_id: String, action: StringName) -> void:
+	if device_id == device and action == &"bomb" and alive:
+		_world.release_bomb(self)
 
 
 func _on_action_pressed(device_id: String, action: StringName) -> void:

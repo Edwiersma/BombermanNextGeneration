@@ -4,7 +4,8 @@ extends RefCounted
 ## this build supports (only those can be hidden under bricks or toggled in settings).
 ## Items are saved by `key`, so the enum order can grow without breaking saved settings.
 
-enum Type { BOMB_UP, FIRE_UP, FULL_FIRE, SPEED_UP, SPEED_DOWN, HEART, VEST, KICK, PUNCH }
+enum Type { BOMB_UP, FIRE_UP, FULL_FIRE, SPEED_UP, SPEED_DOWN, HEART, VEST, KICK, PUNCH,
+	GLOVE, SUPER_GLOVE, LINE_BOMB }
 
 const NONE := -1
 
@@ -19,10 +20,16 @@ const INFO := {
 	Type.VEST: {"key": "safety_vest", "name": "Safety Vest", "symbol": "V", "weight": 1, "color": Color(0.2, 0.85, 0.95)},
 	Type.KICK: {"key": "bomb_kick", "name": "Bomb Kick", "symbol": "K", "weight": 4, "color": Color(1.0, 0.8, 0.2)},
 	Type.PUNCH: {"key": "bomb_punch", "name": "Bomb Punch", "symbol": "P", "weight": 3, "color": Color(0.85, 0.3, 0.9)},
+	Type.GLOVE: {"key": "power_glove", "name": "Power Glove", "symbol": "G", "weight": 2, "color": Color(0.85, 0.55, 0.3)},
+	Type.SUPER_GLOVE: {"key": "super_power_glove", "name": "Super Power Glove", "symbol": "SG", "weight": 1, "color": Color(1.0, 0.85, 0.3)},
+	Type.LINE_BOMB: {"key": "line_bomb", "name": "Line Bomb", "symbol": "L", "weight": 2, "color": Color(0.3, 0.6, 0.75)},
 }
 
+## Items that share one slot: picking one up replaces whichever of them you had.
+const SLOT_A := [Type.GLOVE, Type.SUPER_GLOVE, Type.LINE_BOMB]
+
 const IMPLEMENTED := [Type.BOMB_UP, Type.FIRE_UP, Type.FULL_FIRE, Type.SPEED_UP, Type.SPEED_DOWN,
-	Type.HEART, Type.VEST, Type.KICK, Type.PUNCH]
+	Type.HEART, Type.VEST, Type.KICK, Type.PUNCH, Type.GLOVE, Type.SUPER_GLOVE, Type.LINE_BOMB]
 
 
 static func key(type: int) -> String:

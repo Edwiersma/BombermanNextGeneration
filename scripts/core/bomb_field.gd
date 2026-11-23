@@ -20,6 +20,10 @@ extends RefCounted
 ## - punch(): the bomb leaves the grid and flies Rules.PUNCH_DISTANCE cells over anything,
 ##   wrapping around the arena edge. A taken landing cell makes it bounce one cell further.
 ##   In the air it blocks nothing and cannot be set off; its fuse never runs out mid-air.
+## - lift() / throw() / drop() (Power Glove): a carried bomb is off the grid with its fuse paused
+##   until it is thrown like a punch (Rules.THROW_DISTANCE) or dropped. make_dangerous() turns it
+##   into a Dangerous Bomb (Super Power Glove).
+## - place_line() (Line Bomb): a row of bombs in one direction, stopping at the first obstacle.
 
 signal bomb_placed(id: int, cell: Vector2i, owner: int)
 ## `flames` lists every cell the blast touched, for visuals:
@@ -66,6 +70,7 @@ var player_at: Callable
 var _next_id := 1
 var _bombs := {}    # Vector2i -> Bomb, on the grid (still or sliding)
 var _flying: Array[Bomb] = []
+var _carried := {}  # bomb id -> Bomb, held by a player
 var _flames := {}   # Vector2i -> ticks left
 var _burning := {}  # Vector2i -> ticks left
 
@@ -96,6 +101,14 @@ func has_flame(cell: Vector2i) -> bool:
 
 func is_burning(cell: Vector2i) -> bool:
 	return _burning.has(cell)
+
+
+func owner_at(cell: Vector2i) -> int:
+	return _bombs[cell].owner if _bombs.has(cell) else -1
+
+
+func is_carried_dangerous(id: int) -> bool:
+	return _carried.has(id) and _carried[id].dangerous
 
 
 func fuse_left(cell: Vector2i) -> int:
@@ -163,6 +176,63 @@ func punch(cell: Vector2i, dir: Vector2i) -> bool:
 	bomb.offset = 0.0
 	_launch(bomb, from, cell + dir * Rules.PUNCH_DISTANCE, Rules.PUNCH_FLIGHT_TICKS)
 	return true
+
+
+## Picks up the still bomb in `cell` (Power Glove). Returns its id, or -1.
+func lift(cell: Vector2i) -> int:
+	if not _bombs.has(cell) or _bombs[cell].is_sliding():
+		return -1
+	var bomb: Bomb = _bombs[cell]
+	_bombs.erase(cell)
+	_carried[bomb.id] = bomb
+	return bomb.id
+
+
+## Throws a carried bomb from `from` in `dir`.
+func throw(id: int, from: Vector2i, dir: Vector2i) -> void:
+	if not _carried.has(id):
+		return
+	var bomb: Bomb = _carried[id]
+	_carried.erase(id)
+	_launch(bomb, Vector2(from), from + dir * Rules.THROW_DISTANCE, Rules.THROW_FLIGHT_TICKS)
+
+
+## Puts a carried bomb down in `cell` (the carrier died). If that cell is taken it goes to a free
+## neighbour, and is lost when there is none.
+func drop(id: int, cell: Vector2i) -> void:
+	if not _carried.has(id):
+		return
+	var bomb: Bomb = _carried[id]
+	_carried.erase(id)
+	for candidate in [cell] + Grid.DIRECTIONS.map(func(d): return cell + d):
+		if _can_land(candidate):
+			bomb.cell = candidate
+			bomb.flying = false
+			_bombs[candidate] = bomb
+			return
+	bomb_removed.emit(bomb.id, cell)
+
+
+## Turns a carried bomb into a Dangerous Bomb (Super Power Glove charge).
+func make_dangerous(id: int) -> void:
+	if _carried.has(id) and not _carried[id].dangerous:
+		var bomb: Bomb = _carried[id]
+		bomb.dangerous = true
+		bomb.fuse = Rules.DANGEROUS_FUSE_TICKS
+		bomb_changed.emit(id)
+
+
+## Line Bomb: up to `count` bombs in a row starting next to `from`, stopping at the first wall,
+## brick, bomb, floor item or player. Returns how many were placed.
+func place_line(from: Vector2i, dir: Vector2i, count: int, owner: int, fire_range: int) -> int:
+	var placed := 0
+	for i in range(1, count + 1):
+		var cell := from + dir * i
+		if _blocks_slide(cell):
+			break
+		place_bomb(cell, owner, fire_range)
+		placed += 1
+	return placed
 
 
 ## A sudden-death block landed here: the bomb vanishes without exploding and any flame or
@@ -303,6 +373,7 @@ func _wrap_inside(cell: Vector2i) -> Vector2i:
 func _all_bombs() -> Array:
 	var all: Array = _bombs.values()
 	all.append_array(_flying)
+	all.append_array(_carried.values())
 	return all
 
 

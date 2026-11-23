@@ -84,6 +84,7 @@ func _physics_process(_delta: float) -> void:
 		for player in players:
 			if player and player.alive:
 				player.stats.tick()
+				_tick_carry(player)
 		bombs.tick()
 		_check_deaths()
 		_check_pickups()
@@ -97,6 +98,9 @@ func _process(_delta: float) -> void:
 	for id in _bomb_views:
 		if positions.has(id):
 			_bomb_views[id].position = positions[id]
+	for player in players:
+		if player and player.is_carrying() and _bomb_views.has(player.carried_bomb):
+			_bomb_views[player.carried_bomb].position = player.position + Vector3(0.0, Rules.CARRY_HEIGHT, 0.0)
 	if debug_label.visible:
 		var lines: Array[String] = ["FPS %d   physics ticks %d   state %s   (F3 hides)" % [
 			Engine.get_frames_per_second(), _ticks, MatchRules.State.keys()[rules.state]]]
@@ -135,11 +139,42 @@ func is_blocked_for(_player: Node, cell: Vector2i) -> bool:
 	return grid.is_blocking(cell) or bombs.has_bomb(cell)
 
 
+## Bomb button pressed. Standing on your own bomb: lift it (Power Glove) or lay a line (Line
+## Bomb). Otherwise: place a bomb if you have one left.
 func try_place_bomb(player: Node) -> void:
 	# Input keeps flowing while paused (the pause menu needs it), so check the pause here too.
-	if not rules.is_playing() or get_tree().paused or bombs.bomb_count(player.slot) >= player.stats.max_bombs:
+	if not rules.is_playing() or get_tree().paused or player.is_carrying():
 		return
-	bombs.place_bomb(player.get_cell(), player.slot, player.stats.fire_range)
+	var cell: Vector2i = player.get_cell()
+	var stats: PlayerStats = player.stats
+	if bombs.has_bomb(cell):
+		if bombs.owner_at(cell) == player.slot:
+			if stats.has_glove():
+				player.carried_bomb = bombs.lift(cell)
+				player.carry_ticks = 0
+			elif stats.has_line_bomb():
+				var left := stats.max_bombs - bombs.bomb_count(player.slot)
+				bombs.place_line(cell, player.facing, left, player.slot, stats.fire_range)
+		return
+	if bombs.bomb_count(player.slot) < stats.max_bombs:
+		bombs.place_bomb(cell, player.slot, stats.fire_range)
+
+
+## Bomb button released: throw a carried bomb the way the player faces.
+func release_bomb(player: Node) -> void:
+	if not player.is_carrying() or not rules.is_playing() or get_tree().paused:
+		return
+	bombs.throw(player.carried_bomb, player.get_cell(), player.facing)
+	player.carried_bomb = -1
+
+
+## Super Power Glove: a bomb held long enough becomes a Dangerous Bomb.
+func _tick_carry(player: Node) -> void:
+	if not player.is_carrying():
+		return
+	player.carry_ticks += 1
+	if player.stats.has_super_glove() and player.carry_ticks == Rules.SUPER_GLOVE_CHARGE_TICKS:
+		bombs.make_dangerous(player.carried_bomb)
 
 
 ## Kick: `player` is pressing `dir` into a bomb right in front of them. True if it slid off.
@@ -300,6 +335,9 @@ func _check_pickups() -> void:
 func _on_player_died(player: Node) -> void:
 	rules.player_died(player.slot)
 	hud.set_alive(player.slot, false)
+	if player.is_carrying():
+		bombs.drop(player.carried_bomb, player.get_cell())  # falls where they fell
+		player.carried_bomb = -1
 	if rules.is_playing() and GameState.settings.death_items == MatchSettings.DeathItems.SCATTER:
 		items.scatter(player.stats.collected, _rng, _is_free_for_items)
 	player.stats.collected.clear()

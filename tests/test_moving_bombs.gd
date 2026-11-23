@@ -195,3 +195,87 @@ func test_kick_and_punch_items() -> void:
 	check(stats.has_kick and stats.has_punch, "abilities gained")
 	stats.reset(MatchSettings.new())
 	check(not stats.has_kick and not stats.has_punch, "reset each round")
+
+
+# --- Power Glove, Super Power Glove, Line Bomb ---------------------------------
+
+func test_lift_and_throw() -> void:
+	var field := _field(["############", "#..........#", "############"])
+	field.place_bomb(Vector2i(2, 1), 0, 2)
+	var id := field.lift(Vector2i(2, 1))
+	check(id != -1, "lifted")
+	check(not field.has_bomb(Vector2i(2, 1)), "off the grid while carried")
+	check_eq(field.bomb_count(0), 1, "still the owner's bomb")
+	check(field.bomb_positions().is_empty(), "carried bombs are positioned by the carrier, not the field")
+	field.throw(id, Vector2i(2, 1), RIGHT)
+	_ticks(field, Rules.THROW_FLIGHT_TICKS + 1)
+	check(field.has_bomb(Vector2i(2 + Rules.THROW_DISTANCE, 1)), "landed THROW_DISTANCE away")
+
+
+func test_carried_bomb_fuse_is_paused() -> void:
+	var field := _field(CORRIDOR)
+	field.place_bomb(Vector2i(2, 1), 0, 2)
+	var id := field.lift(Vector2i(2, 1))
+	_ticks(field, Rules.BOMB_FUSE_TICKS * 2)
+	check(exploded.is_empty(), "never explodes while held")
+	field.drop(id, Vector2i(3, 1))
+	check(field.has_bomb(Vector2i(3, 1)), "dropped back on the grid")
+	_ticks(field, Rules.BOMB_FUSE_TICKS)
+	check_eq(exploded.size(), 1, "fuse runs again once down")
+
+
+func test_cannot_lift_a_sliding_bomb_or_nothing() -> void:
+	var field := _field(CORRIDOR)
+	check_eq(field.lift(Vector2i(2, 1)), -1, "no bomb")
+	field.place_bomb(Vector2i(2, 1), 0, 2)
+	field.kick(Vector2i(2, 1), RIGHT)
+	check_eq(field.lift(Vector2i(2, 1)), -1, "sliding")
+
+
+func test_drop_onto_a_taken_cell_uses_a_neighbour() -> void:
+	var field := _field(CORRIDOR)
+	field.place_bomb(Vector2i(4, 1), 0, 2)
+	var id := field.lift(Vector2i(4, 1))
+	field.place_bomb(Vector2i(4, 1), 1, 2)  # someone else put a bomb there meanwhile
+	field.drop(id, Vector2i(4, 1))
+	check(field.has_bomb(Vector2i(3, 1)) or field.has_bomb(Vector2i(5, 1)), "went next to it")
+	check_eq(field.bomb_count(0), 1, "not lost")
+
+
+func test_make_dangerous_while_carried() -> void:
+	var field := _field(CORRIDOR)
+	field.place_bomb(Vector2i(2, 1), 0, 2)
+	var id := field.lift(Vector2i(2, 1))
+	field.make_dangerous(id)
+	check(field.is_carried_dangerous(id), "dangerous in hand")
+	field.throw(id, Vector2i(2, 1), RIGHT)
+	_ticks(field, Rules.THROW_FLIGHT_TICKS + 1)
+	check(field.is_dangerous(Vector2i(6, 1)), "lands as a Dangerous Bomb")
+
+
+func test_line_bomb_stops_at_obstacles() -> void:
+	var field := _field(["##########", "#....+...#", "##########"])
+	var placed := field.place_line(Vector2i(1, 1), RIGHT, 6, 0, 2)
+	check_eq(placed, 3, "three cells before the brick")
+	for x in [2, 3, 4]:
+		check(field.has_bomb(Vector2i(x, 1)), "bomb at %d" % x)
+	check(not field.has_bomb(Vector2i(6, 1)), "nothing past the brick")
+
+
+func test_line_bomb_limited_by_count_and_players() -> void:
+	var field := _field(CORRIDOR)
+	check_eq(field.place_line(Vector2i(1, 1), RIGHT, 2, 0, 2), 2, "only as many as allowed")
+	field.player_at = func(cell): return cell == Vector2i(5, 1)
+	check_eq(field.place_line(Vector2i(3, 1), RIGHT, 5, 1, 2), 1, "stops before a player")
+
+
+func test_slot_a_items_replace_each_other() -> void:
+	var stats := PlayerStats.new()
+	stats.apply(Items.Type.GLOVE)
+	check(stats.has_glove() and not stats.has_super_glove(), "glove")
+	stats.apply(Items.Type.LINE_BOMB)
+	check(stats.has_line_bomb() and not stats.has_glove(), "line bomb replaced it")
+	stats.apply(Items.Type.SUPER_GLOVE)
+	check(stats.has_super_glove() and stats.has_glove() and not stats.has_line_bomb(), "super glove counts as a glove")
+	stats.reset(MatchSettings.new())
+	check_eq(stats.slot_a, Items.NONE, "reset each round")
