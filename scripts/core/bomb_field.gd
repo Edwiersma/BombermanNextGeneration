@@ -24,6 +24,14 @@ extends RefCounted
 ##   until it is thrown like a punch (Rules.THROW_DISTANCE) or dropped. make_dangerous() turns it
 ##   into a Dangerous Bomb (Super Power Glove).
 ## - place_line() (Line Bomb): a row of bombs in one direction, stopping at the first obstacle.
+##
+## Bomb options (place_bomb `options`):
+## - "remote": no fuse; goes off on detonate_oldest_remote() (or when fire reaches it).
+## - "pierce": the blast burns through bricks out to its full range.
+## - "power": just marks a Power Bomb for visuals (Match gives it maximum range).
+## - "mine": sinks into the floor: blocks nothing, arms once nobody stands on it, then goes off
+##   when a player steps on it or fire reaches it.
+## - kick()/punch() with `bouncy`: the bomb hops in random directions until its fuse runs out.
 
 signal bomb_placed(id: int, cell: Vector2i, owner: int)
 ## `flames` lists every cell the blast touched, for visuals:
@@ -47,6 +55,12 @@ class Bomb:
 	var fire_range: int
 	var fuse: int
 	var dangerous := false
+	var remote := false
+	var pierce := false
+	var power := false
+	var mine := false
+	var armed := false       # mine: nobody standing on it any more
+	var bouncing := false    # Bouncy Bomb: keeps hopping until it goes off
 	# Sliding (kicked):
 	var slide_dir := Vector2i.ZERO
 	var offset := 0.0        # -0.5..0.5 cells from `cell` along slide_dir
@@ -71,6 +85,9 @@ var _next_id := 1
 var _bombs := {}    # Vector2i -> Bomb, on the grid (still or sliding)
 var _flying: Array[Bomb] = []
 var _carried := {}  # bomb id -> Bomb, held by a player
+var _mines := {}    # Vector2i -> Bomb, sunk into the floor
+## Random hop directions for Bouncy Bombs (tests can seed it).
+var rng := RandomNumberGenerator.new()
 var _flames := {}   # Vector2i -> ticks left
 var _burning := {}  # Vector2i -> ticks left
 
@@ -103,6 +120,19 @@ func is_burning(cell: Vector2i) -> bool:
 	return _burning.has(cell)
 
 
+func has_mine(cell: Vector2i) -> bool:
+	return _mines.has(cell)
+
+
+## {"remote", "pierce", "power", "mine", "dangerous"} for the bomb with `id` ({} if gone).
+func bomb_flags(id: int) -> Dictionary:
+	for bomb: Bomb in _all_bombs():
+		if bomb.id == id:
+			return {"remote": bomb.remote, "pierce": bomb.pierce, "power": bomb.power,
+				"mine": bomb.mine, "dangerous": bomb.dangerous}
+	return {}
+
+
 func owner_at(cell: Vector2i) -> int:
 	return _bombs[cell].owner if _bombs.has(cell) else -1
 
@@ -129,6 +159,8 @@ func bomb_positions() -> Dictionary:
 	for bomb: Bomb in _bombs.values():
 		var at := Vector2(bomb.cell) + Vector2(bomb.slide_dir) * bomb.offset
 		positions[bomb.id] = Vector3(at.x, 0.0, at.y)
+	for bomb: Bomb in _mines.values():
+		positions[bomb.id] = Vector3(bomb.cell.x, 0.0, bomb.cell.y)
 	for bomb in _flying:
 		var t := 1.0 - float(bomb.fly_ticks) / bomb.fly_total
 		var at := bomb.fly_from.lerp(bomb.fly_to, t)
@@ -137,9 +169,9 @@ func bomb_positions() -> Dictionary:
 	return positions
 
 
-## Places a bomb unless the cell is solid or already holds one.
-func place_bomb(cell: Vector2i, owner: int, fire_range: int) -> bool:
-	if grid.is_blocking(cell) or _bombs.has(cell):
+## Places a bomb unless the cell is solid or already holds one. See the header for `options`.
+func place_bomb(cell: Vector2i, owner: int, fire_range: int, options := {}) -> bool:
+	if grid.is_blocking(cell) or _bombs.has(cell) or _mines.has(cell):
 		return false
 	var bomb := Bomb.new()
 	bomb.id = _next_id
@@ -148,29 +180,67 @@ func place_bomb(cell: Vector2i, owner: int, fire_range: int) -> bool:
 	bomb.owner = owner
 	bomb.fire_range = fire_range
 	bomb.fuse = Rules.BOMB_FUSE_TICKS
-	_bombs[cell] = bomb
+	bomb.remote = options.get("remote", false)
+	bomb.pierce = options.get("pierce", false)
+	bomb.power = options.get("power", false)
+	bomb.mine = options.get("mine", false)
+	if bomb.mine:
+		_mines[cell] = bomb
+	else:
+		_bombs[cell] = bomb
 	bomb_placed.emit(bomb.id, cell, owner)
 	return true
 
 
+## Remote Control: sets off the owner's oldest remote bomb on the grid. False when there is none.
+func detonate_oldest_remote(owner: int) -> bool:
+	var oldest: Bomb = null
+	for bomb: Bomb in _bombs.values():
+		if bomb.owner == owner and bomb.remote and (oldest == null or bomb.id < oldest.id):
+			oldest = bomb
+	if oldest == null:
+		return false
+	oldest.remote = false
+	oldest.fuse = 1  # goes off on the next tick
+	return true
+
+
+## The owner lost the Remote (died or swapped items): their waiting bombs get a normal fuse.
+func release_remote(owner: int) -> void:
+	for bomb: Bomb in _all_bombs():
+		if bomb.owner == owner and bomb.remote:
+			bomb.remote = false
+			bomb.fuse = Rules.BOMB_FUSE_TICKS
+
+
 ## Starts the still bomb in `cell` sliding in `dir`. False when there is no bomb or it cannot move.
-func kick(cell: Vector2i, dir: Vector2i) -> bool:
+## A `bouncy` kick sends it hopping instead (Bouncy Bomb).
+func kick(cell: Vector2i, dir: Vector2i, bouncy := false) -> bool:
 	if not _bombs.has(cell):
 		return false
 	var bomb: Bomb = _bombs[cell]
-	if bomb.is_sliding() or _blocks_slide(cell + dir):
+	if bomb.is_sliding():
+		return false
+	if bouncy:
+		_bombs.erase(cell)
+		bomb.bouncing = true
+		_launch(bomb, Vector2(cell), cell + dir, Rules.BOUNCE_FLIGHT_TICKS)
+		return true
+	if _blocks_slide(cell + dir):
 		return false
 	bomb.slide_dir = dir
 	bomb.offset = 0.0
 	return true
 
 
-## Sends the bomb in `cell` flying in `dir`. False when there is no bomb there.
-func punch(cell: Vector2i, dir: Vector2i) -> bool:
+## Sends the bomb in `cell` flying in `dir`. False when there is no bomb there. A `bouncy` punch
+## keeps it hopping after it lands (Bouncy Bomb).
+func punch(cell: Vector2i, dir: Vector2i, bouncy := false) -> bool:
 	if not _bombs.has(cell):
 		return false
 	var bomb: Bomb = _bombs[cell]
 	_bombs.erase(cell)
+	bomb.bouncing = bouncy
 	var from := Vector2(cell) + Vector2(bomb.slide_dir) * bomb.offset
 	bomb.slide_dir = Vector2i.ZERO
 	bomb.offset = 0.0
@@ -224,13 +294,13 @@ func make_dangerous(id: int) -> void:
 
 ## Line Bomb: up to `count` bombs in a row starting next to `from`, stopping at the first wall,
 ## brick, bomb, floor item or player. Returns how many were placed.
-func place_line(from: Vector2i, dir: Vector2i, count: int, owner: int, fire_range: int) -> int:
+func place_line(from: Vector2i, dir: Vector2i, count: int, owner: int, fire_range: int, options := {}) -> int:
 	var placed := 0
 	for i in range(1, count + 1):
 		var cell := from + dir * i
 		if _blocks_slide(cell):
 			break
-		place_bomb(cell, owner, fire_range)
+		place_bomb(cell, owner, fire_range, options)
 		placed += 1
 	return placed
 
@@ -238,10 +308,11 @@ func place_line(from: Vector2i, dir: Vector2i, count: int, owner: int, fire_rang
 ## A sudden-death block landed here: the bomb vanishes without exploding and any flame or
 ## burning brick in the cell stops.
 func crush(cell: Vector2i) -> void:
-	if _bombs.has(cell):
-		var bomb: Bomb = _bombs[cell]
-		_bombs.erase(cell)
-		bomb_removed.emit(bomb.id, cell)
+	for store: Dictionary in [_bombs, _mines]:
+		if store.has(cell):
+			var bomb: Bomb = store[cell]
+			store.erase(cell)
+			bomb_removed.emit(bomb.id, cell)
 	_flames.erase(cell)
 	_burning.erase(cell)
 
@@ -252,27 +323,41 @@ func tick() -> void:
 	_move_sliding()
 	_move_flying()
 
-	var due: Array[Vector2i] = []
-	for cell: Vector2i in _bombs:
-		var bomb: Bomb = _bombs[cell]
-		bomb.fuse -= 1
-		if bomb.fuse <= 0 or _flames.has(cell):
-			due.append(cell)
+	var due: Array[Bomb] = []
+	for bomb: Bomb in _bombs.values():
+		if not bomb.remote:
+			bomb.fuse -= 1
+		if bomb.fuse <= 0 or _flames.has(bomb.cell):
+			due.append(bomb)
+	for bomb: Bomb in _mines.values():
+		var stood_on: bool = player_at.is_valid() and player_at.call(bomb.cell)
+		if not bomb.armed and not stood_on:
+			bomb.armed = true
+		elif bomb.armed and stood_on:
+			due.append(bomb)
+		if _flames.has(bomb.cell) and bomb not in due:
+			due.append(bomb)
 	for bomb in _flying:
-		bomb.fuse = maxi(bomb.fuse - 1, 1)  # goes off right after landing if it runs out mid-air
+		if not bomb.remote:
+			# Normal flights go off right after landing if the fuse runs out mid-air; bouncing
+			# bombs keep counting so they come down for good.
+			bomb.fuse = maxi(bomb.fuse - 1, 0 if bomb.bouncing else 1)
 
 	# Chain reactions resolve within this tick.
 	while not due.is_empty():
-		var cell: Vector2i = due.pop_front()
-		if not _bombs.has(cell):
-			continue
-		var bomb: Bomb = _bombs[cell]
-		_bombs.erase(cell)
+		var bomb: Bomb = due.pop_front()
+		if _bombs.get(bomb.cell) == bomb:
+			_bombs.erase(bomb.cell)
+		elif _mines.get(bomb.cell) == bomb:
+			_mines.erase(bomb.cell)
+		else:
+			continue  # already exploded this tick
 		var flames := _square_blast(bomb) if bomb.dangerous else _blast(bomb)
 		for flame in flames:
-			if _bombs.has(flame.cell):
-				due.append(flame.cell)
-		bomb_exploded.emit(bomb.id, cell, bomb.owner, flames)
+			for store: Dictionary in [_bombs, _mines]:
+				if store.has(flame.cell) and store[flame.cell] not in due:
+					due.append(store[flame.cell])
+		bomb_exploded.emit(bomb.id, bomb.cell, bomb.owner, flames)
 
 
 # --- Moving ------------------------------------------------------------------
@@ -329,6 +414,10 @@ func _move_flying() -> void:
 			continue
 		_flying.erase(bomb)
 		var landing := bomb.cell
+		if bomb.bouncing and bomb.fuse > 0:
+			var hop: Vector2i = Grid.DIRECTIONS[rng.randi_range(0, Grid.DIRECTIONS.size() - 1)]
+			_launch(bomb, Vector2(landing), landing + hop, Rules.BOUNCE_FLIGHT_TICKS)
+			continue
 		if _can_land(landing):
 			bomb.flying = false
 			_bombs[landing] = bomb
@@ -374,6 +463,7 @@ func _all_bombs() -> Array:
 	var all: Array = _bombs.values()
 	all.append_array(_flying)
 	all.append_array(_carried.values())
+	all.append_array(_mines.values())
 	return all
 
 
@@ -391,6 +481,8 @@ func _blast(bomb: Bomb) -> Array:
 			if cell_type == Grid.Cell.SOFT:
 				_start_burning(cell)
 				flames.append(_flame(cell, Flame.BLOCK, dir))
+				if bomb.pierce:
+					continue  # Piercing Bomb: on through the brick
 				break
 			_ignite(cell)
 			var hits_bomb := _bombs.has(cell)

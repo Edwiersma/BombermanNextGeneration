@@ -17,6 +17,8 @@ var has_kick := false   # walk into a bomb to kick it
 var has_punch := false  # special punches the bomb in front
 ## Power Glove, Super Power Glove or Line Bomb (one at a time), or Items.NONE.
 var slot_a := Items.NONE
+## Remote Control, Piercing Bomb, Power Bomb, Land Mine or Bouncy Bomb (one at a time), or NONE.
+var slot_b := Items.NONE
 var vest_ticks := 0   # Safety Vest time left
 var grace_ticks := 0  # invulnerable after a Heart absorbed a hit
 
@@ -31,6 +33,7 @@ func reset(settings: MatchSettings) -> void:
 	has_kick = false
 	has_punch = false
 	slot_a = Items.NONE
+	slot_b = Items.NONE
 	vest_ticks = 0
 	grace_ticks = 0
 
@@ -68,6 +71,26 @@ func has_line_bomb() -> bool:
 	return slot_a == Items.Type.LINE_BOMB
 
 
+func has_remote() -> bool:
+	return slot_b == Items.Type.REMOTE
+
+
+func has_pierce() -> bool:
+	return slot_b == Items.Type.PIERCE
+
+
+func has_power_bomb() -> bool:
+	return slot_b == Items.Type.POWER_BOMB
+
+
+func has_land_mine() -> bool:
+	return slot_b == Items.Type.LAND_MINE
+
+
+func has_bouncy() -> bool:
+	return slot_b == Items.Type.BOUNCY
+
+
 func speed() -> float:
 	return Rules.PLAYER_SPEED + (speed_level - Rules.START_SPEED_LEVEL) * Rules.SPEED_STEP
 
@@ -94,4 +117,6 @@ func apply(item: int) -> void:
 			has_punch = true
 		Items.Type.GLOVE, Items.Type.SUPER_GLOVE, Items.Type.LINE_BOMB:
 			slot_a = item
+		Items.Type.REMOTE, Items.Type.PIERCE, Items.Type.POWER_BOMB, Items.Type.LAND_MINE, Items.Type.BOUNCY:
+			slot_b = item
 	collected.append(item)

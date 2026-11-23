@@ -29,7 +29,7 @@ var carried_bomb := -1
 var carry_ticks := 0
 
 ## Must provide is_blocked_for(player, cell), try_place_bomb(player), release_bomb(player),
-## try_kick(player, dir) and try_punch(player).
+## try_kick(player, dir) and try_special(player).
 var _world: Node
 var _previous_pos := Vector2.ZERO  # grid_pos at the previous tick, for interpolation
 var _held_dirs: Array[Vector2i] = []  # most recently pressed first
@@ -120,7 +120,7 @@ func _on_action_pressed(device_id: String, action: StringName) -> void:
 			_world.try_place_bomb(self)
 		return
 	if action == &"special":
-		if alive and input_enabled and _world.try_punch(self):
+		if alive and input_enabled and _world.try_special(self):
 			_play_action_pop()
 		return
 	if not DIRECTION_ACTIONS.has(action):

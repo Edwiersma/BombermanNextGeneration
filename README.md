@@ -6,7 +6,7 @@ A local-multiplayer versus game in the style of **Bomberman Generations** (GameC
 
 ## Status
 **Phase 1** (local multiplayer, base mechanics) is playable: main menu, 4-player lobby, Bomberman-style movement, bombs and chain reactions, rounds with a clock and sudden death, results and rematch. Remaining for Phase 1: a full 4-controller browser playtest.
-**Phase 2** (in progress): match settings and items are in (stat items, Heart, Safety Vest, Kick, Punch, Gloves, Line Bomb so far); still to come from the Bomberman Generation battle set: Remote, Piercing, Power Bomb, Land Mine, Bouncy Bomb and curses.
+**Phase 2** (in progress): match settings and items are in (everything from the Bomberman Generation battle set except curses so far); curses come next.
 
 ## Play it locally
 Requires Godot 4.7.1 with its export templates, and Python 3 for the local web server.
@@ -32,7 +32,7 @@ You can also open this folder in the Godot editor and press F5.
 | Back · un-ready · leave | Esc | Backspace | Circle |
 | Start · pause | Tab | P | Options |
 | Match settings (lobby) | Q | Delete | Triangle |
-| Special (punch; more in Phase 2) | E | Shift | Circle |
+| Special (punch, remote detonate) | E | Shift | Circle |
 
 ## Rules (Phase 1)
 13 × 11 arena with pillars and brick walls. Bombs (1 at a time, fire range 2 by default) explode after 3 s in a cross, destroy the first brick in each direction and set off other bombs in the same instant. Fire kills, including your own. Last player standing wins the round; at 1:00 left, **HURRY UP!** blocks fall in a spiral and crush anything below. Wins needed (1-5), round time (1:00-5:00 or no limit), sudden death and starting bombs/fire are match settings, saved in the browser. The full spec, including which numbers still need checking against the original, is kept with the project plan; all tunable numbers are in [`scripts/core/rules.gd`](scripts/core/rules.gd).
@@ -55,7 +55,13 @@ Items hide under bricks and appear when the brick burns away; walk over one to p
 | SG | Super Power Glove | like the Power Glove; hold the bomb for 2 s and it becomes a Dangerous Bomb |
 | L | Line Bomb | standing on the bomb you just placed, press Bomb again to lay a line of your remaining bombs |
 
-Power Glove, Super Power Glove and Line Bomb share one slot: picking up one replaces the others.
+| RC | Remote Control | your bombs have no fuse; press Special to set off the oldest one |
+| PI | Piercing Bomb | blasts burn through bricks out to their full range |
+| PW | Power Bomb | your first bomb out has the maximum range |
+| LM | Land Mine | your first bomb out sinks into the floor and goes off when someone steps on it |
+| BO | Bouncy Bomb | bombs you kick or punch keep hopping around until they explode |
+
+Power Glove, Super Power Glove and Line Bomb share one slot; Remote, Piercing, Power, Land Mine and Bouncy share another. Picking up an item replaces the one in its slot. With both Punch and Remote, Special punches the bomb in front of you if there is one, otherwise it sets off a remote bomb.
 
 Two kicked bombs that collide merge into a glowing red **Dangerous Bomb**, which explodes in a 5 × 5 square.
 

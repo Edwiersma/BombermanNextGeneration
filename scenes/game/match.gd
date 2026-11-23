@@ -154,10 +154,24 @@ func try_place_bomb(player: Node) -> void:
 				player.carry_ticks = 0
 			elif stats.has_line_bomb():
 				var left := stats.max_bombs - bombs.bomb_count(player.slot)
-				bombs.place_line(cell, player.facing, left, player.slot, stats.fire_range)
+				bombs.place_line(cell, player.facing, left, player.slot, stats.fire_range, _bomb_options(stats, false))
 		return
 	if bombs.bomb_count(player.slot) < stats.max_bombs:
-		bombs.place_bomb(cell, player.slot, stats.fire_range)
+		var first := bombs.bomb_count(player.slot) == 0
+		var options := _bomb_options(stats, first)
+		var fire_range := Rules.MAX_FIRE if options.get("power", false) else stats.fire_range
+		bombs.place_bomb(cell, player.slot, fire_range, options)
+
+
+## Slot B effects on a new bomb. Power Bomb and Land Mine only apply to a player's first bomb
+## out ("to plant another, all your other bombs must have gone off first").
+func _bomb_options(stats: PlayerStats, first: bool) -> Dictionary:
+	return {
+		"remote": stats.has_remote(),
+		"pierce": stats.has_pierce(),
+		"power": stats.has_power_bomb() and first,
+		"mine": stats.has_land_mine() and first,
+	}
 
 
 ## Bomb button released: throw a carried bomb the way the player faces.
@@ -181,14 +195,24 @@ func _tick_carry(player: Node) -> void:
 func try_kick(player: Node, dir: Vector2i) -> bool:
 	if not rules.is_playing() or get_tree().paused or not player.stats.has_kick:
 		return false
-	return bombs.kick(player.get_cell() + dir, dir)
+	return bombs.kick(player.get_cell() + dir, dir, player.stats.has_bouncy())
 
 
 ## Punch: sends the bomb in front of `player` flying. True if there was one.
 func try_punch(player: Node) -> bool:
 	if not rules.is_playing() or get_tree().paused or not player.stats.has_punch:
 		return false
-	return bombs.punch(player.get_cell() + player.facing, player.facing)
+	return bombs.punch(player.get_cell() + player.facing, player.facing, player.stats.has_bouncy())
+
+
+## Special button: punch the bomb in front if possible, otherwise set off the oldest remote bomb.
+## Returns true when something happened.
+func try_special(player: Node) -> bool:
+	if try_punch(player):
+		return true
+	if not rules.is_playing() or get_tree().paused or not player.stats.has_remote():
+		return false
+	return bombs.detonate_oldest_remote(player.slot)
 
 
 # --- Match flow --------------------------------------------------------------
@@ -328,13 +352,17 @@ func _check_pickups() -> void:
 		if player and player.alive:
 			var item := items.take(player.get_cell())
 			if item != Items.NONE:
+				var had_remote: bool = player.stats.has_remote()
 				player.stats.apply(item)
+				if had_remote and not player.stats.has_remote():
+					bombs.release_remote(player.slot)  # swapped the Remote for another item
 				_show_pickup(player, item)
 
 
 func _on_player_died(player: Node) -> void:
 	rules.player_died(player.slot)
 	hud.set_alive(player.slot, false)
+	bombs.release_remote(player.slot)  # nobody left to press the button
 	if player.is_carrying():
 		bombs.drop(player.carried_bomb, player.get_cell())  # falls where they fell
 		player.carried_bomb = -1
@@ -425,6 +453,7 @@ func _on_bomb_placed(id: int, cell: Vector2i, _owner: int) -> void:
 	var view := BombView.new()
 	view.position = Grid.cell_to_world(cell)
 	effects.add_child(view)
+	view.configure(bombs.bomb_flags(id))
 	_bomb_views[id] = view
 
 

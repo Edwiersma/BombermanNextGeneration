@@ -419,3 +419,80 @@ func test_dying_while_carrying_drops_the_bomb() -> void:
 	check(not p.is_carrying(), "let go")
 	check(m.bombs.has_bomb(cell), "dropped where they fell")
 	m.free()
+
+
+func test_special_detonates_remote_bombs() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.REMOTE)
+	p.grid_pos = Vector2(1, 3)
+	m.try_place_bomb(p)
+	p.grid_pos = Vector2(1, 1)
+	_run(m, Rules.BOMB_FUSE_TICKS * 2)
+	check(m.bombs.has_bomb(Vector2i(1, 3)), "remote bomb waits")
+	check(m.try_special(p), "detonated")
+	_run(m, 1)
+	check(not m.bombs.has_bomb(Vector2i(1, 3)), "gone")
+	m.free()
+
+
+func test_punch_takes_priority_over_remote() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.REMOTE)
+	p.stats.apply(Items.Type.PUNCH)
+	p.grid_pos = Vector2(1, 2)
+	m.try_place_bomb(p)
+	p.grid_pos = Vector2(1, 1)
+	p.facing = Vector2i.DOWN
+	check(m.try_special(p), "special used")
+	check_eq(m.bombs.flying_count(), 1, "bomb in front was punched, not detonated")
+	m.free()
+
+
+func test_power_bomb_only_for_the_first_bomb() -> void:
+	var settings := MatchSettings.new()
+	settings.start_bombs = 2
+	var m := _playing([0], settings)
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.POWER_BOMB)
+	m.try_place_bomb(p)             # first bomb: power, max range
+	p.grid_pos = Vector2(1, 2)
+	m.try_place_bomb(p)             # second bomb: normal
+	check(m.bombs.bomb_flags(1).power, "first is a Power Bomb")
+	check(not m.bombs.bomb_flags(2).power, "second is normal")
+	GameState.settings = MatchSettings.new()
+	m.free()
+
+
+func test_land_mine_triggers_on_another_player() -> void:
+	var m := _playing([0, 1])
+	var miner: Node3D = m.players[0]
+	var victim: Node3D = m.players[1]
+	miner.stats.apply(Items.Type.LAND_MINE)
+	miner.grid_pos = Vector2(1, 3)
+	m.try_place_bomb(miner)         # first bomb: a mine
+	check(m.bombs.has_mine(Vector2i(1, 3)), "mine laid")
+	check(not m.is_blocked_for(victim, Vector2i(1, 3)), "does not block")
+	miner.grid_pos = Vector2(1, 1)
+	_run(m, 2)                      # arms
+	victim.grid_pos = Vector2(1, 3)
+	_run(m, 2)
+	check(not m.bombs.has_mine(Vector2i(1, 3)), "triggered")
+	check(not victim.alive, "victim caught in the blast")
+	m.free()
+
+
+func test_swapping_remote_releases_waiting_bombs() -> void:
+	var m := _playing([0])
+	var p: Node3D = m.players[0]
+	p.stats.apply(Items.Type.REMOTE)
+	p.grid_pos = Vector2(1, 3)
+	m.try_place_bomb(p)
+	p.grid_pos = Vector2(1, 1)
+	m.items.place(Vector2i(1, 1), Items.Type.PIERCE)
+	_run(m, 1)                      # picks up Piercing Bomb, losing the Remote
+	check(not p.stats.has_remote(), "remote gone")
+	_run(m, Rules.BOMB_FUSE_TICKS + 1)
+	check(not m.bombs.has_bomb(Vector2i(1, 3)), "the waiting bomb got a fuse and went off")
+	m.free()
