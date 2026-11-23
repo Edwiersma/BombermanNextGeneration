@@ -90,6 +90,18 @@ const SUPER_GLOVE_CHARGE_TICKS := 120
 ## How high a carried bomb sits above the player, in cells.
 const CARRY_HEIGHT := 1.15
 
+## --- Curses (Skull) --- all VERIFY against Generation
+const CURSE_TICKS := 15 * TICKS_PER_SECOND
+const CURSE_FAST_SPEED := 9.0   # cells per second
+const CURSE_SLOW_SPEED := 1.8
+const SHORT_FUSE_TICKS := 60
+const LONG_FUSE_TICKS := 360
+## Swap curse: time between swaps is random in this range.
+const SWAP_MIN_TICKS := 120
+const SWAP_MAX_TICKS := 300
+## Players closer than this (in cells) are touching, for spreading curses.
+const CURSE_TOUCH_DISTANCE := 0.6
+
 
 static func ticks_to_seconds(ticks: int) -> float:
 	return ticks / float(TICKS_PER_SECOND)

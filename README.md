@@ -6,7 +6,7 @@ A local-multiplayer versus game in the style of **Bomberman Generations** (GameC
 
 ## Status
 **Phase 1** (local multiplayer, base mechanics) is playable: main menu, 4-player lobby, Bomberman-style movement, bombs and chain reactions, rounds with a clock and sudden death, results and rematch. Remaining for Phase 1: a full 4-controller browser playtest.
-**Phase 2** (in progress): match settings and items are in (everything from the Bomberman Generation battle set except curses so far); curses come next.
+**Phase 2** (in progress): match settings and items are in (the full Bomberman Generation battle item set, including the Skull and its 10 curses). Remaining: balancing and docs.
 
 ## Play it locally
 Requires Godot 4.7.1 with its export templates, and Python 3 for the local web server.
@@ -60,6 +60,9 @@ Items hide under bricks and appear when the brick burns away; walk over one to p
 | PW | Power Bomb | your first bomb out has the maximum range |
 | LM | Land Mine | your first bomb out sinks into the floor and goes off when someone steps on it |
 | BO | Bouncy Bomb | bombs you kick or punch keep hopping around until they explode |
+| SK | Skull | a random curse for 15 s (its name floats above you) |
+
+Curses: Too Fast, Too Slow, Loose Hands (drops bombs on its own), Hands Tied (no bombs), No Power (1 bomb, range 1), Can't Stop (keeps walking), Dizzy (reversed controls), Short Fuse, Long Fuse, Swap (trades places with another player now and then). Touching a player passes your curse on (match setting).
 
 Power Glove, Super Power Glove and Line Bomb share one slot; Remote, Piercing, Power, Land Mine and Bouncy share another. Picking up an item replaces the one in its slot. With both Punch and Remote, Special punches the bomb in front of you if there is one, otherwise it sets off a remote bomb.
 

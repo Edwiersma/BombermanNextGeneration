@@ -85,9 +85,12 @@ func _physics_process(_delta: float) -> void:
 			if player and player.alive:
 				player.stats.tick()
 				_tick_carry(player)
+				_tick_curse(player)
 		bombs.tick()
 		_check_deaths()
 		_check_pickups()
+		if GameState.settings.curse_spread:
+			_spread_curses()
 	rules.tick()
 
 
@@ -152,14 +155,24 @@ func try_place_bomb(player: Node) -> void:
 			if stats.has_glove():
 				player.carried_bomb = bombs.lift(cell)
 				player.carry_ticks = 0
-			elif stats.has_line_bomb():
-				var left := stats.max_bombs - bombs.bomb_count(player.slot)
-				bombs.place_line(cell, player.facing, left, player.slot, stats.fire_range, _bomb_options(stats, false))
+			elif stats.has_line_bomb() and not stats.has_curse(Curses.Type.HANDS_TIED):
+				var left := stats.bomb_capacity() - bombs.bomb_count(player.slot)
+				bombs.place_line(cell, player.facing, left, player.slot, stats.blast_range(), _bomb_options(stats, false))
 		return
-	if bombs.bomb_count(player.slot) < stats.max_bombs:
+	_place_new_bomb(player)
+
+
+## Places a bomb in the player's cell if they may (curses, bombs left).
+func _place_new_bomb(player: Node) -> void:
+	var cell: Vector2i = player.get_cell()
+	var stats: PlayerStats = player.stats
+	if stats.has_curse(Curses.Type.HANDS_TIED) or bombs.has_bomb(cell):
+		return
+	if bombs.bomb_count(player.slot) < stats.bomb_capacity():
 		var first := bombs.bomb_count(player.slot) == 0
 		var options := _bomb_options(stats, first)
-		var fire_range := Rules.MAX_FIRE if options.get("power", false) else stats.fire_range
+		var power: bool = options.get("power", false) and not stats.has_curse(Curses.Type.NO_POWER)
+		var fire_range := Rules.MAX_FIRE if power else stats.blast_range()
 		bombs.place_bomb(cell, player.slot, fire_range, options)
 
 
@@ -171,6 +184,7 @@ func _bomb_options(stats: PlayerStats, first: bool) -> Dictionary:
 		"pierce": stats.has_pierce(),
 		"power": stats.has_power_bomb() and first,
 		"mine": stats.has_land_mine() and first,
+		"fuse": stats.bomb_fuse(),
 	}
 
 
@@ -356,19 +370,65 @@ func _check_pickups() -> void:
 				player.stats.apply(item)
 				if had_remote and not player.stats.has_remote():
 					bombs.release_remote(player.slot)  # swapped the Remote for another item
-				_show_pickup(player, item)
+				if item == Items.Type.SKULL:
+					_curse(player, Curses.random(_rng), Rules.CURSE_TICKS)
+				else:
+					_show_pickup(player, item)
 
 
 func _on_player_died(player: Node) -> void:
 	rules.player_died(player.slot)
 	hud.set_alive(player.slot, false)
 	bombs.release_remote(player.slot)  # nobody left to press the button
+	player.stats.clear_curse()
 	if player.is_carrying():
 		bombs.drop(player.carried_bomb, player.get_cell())  # falls where they fell
 		player.carried_bomb = -1
 	if rules.is_playing() and GameState.settings.death_items == MatchSettings.DeathItems.SCATTER:
 		items.scatter(player.stats.collected, _rng, _is_free_for_items)
 	player.stats.collected.clear()
+
+
+# --- Curses ------------------------------------------------------------------
+
+func _curse(player: Node, curse: int, ticks: int) -> void:
+	player.stats.set_curse(curse, ticks)
+	_show_popup(player, Curses.display_name(curse).to_upper() + "!", Items.color(Items.Type.SKULL).lightened(0.45))
+
+
+## Curse effects that act on their own each tick: Loose Hands and Swap.
+func _tick_curse(player: Node) -> void:
+	var stats: PlayerStats = player.stats
+	if stats.has_curse(Curses.Type.LOOSE_HANDS) and not player.is_carrying():
+		_place_new_bomb(player)
+	elif stats.has_curse(Curses.Type.SWAP):
+		stats.swap_timer -= 1
+		if stats.swap_timer <= 0:
+			stats.swap_timer = _rng.randi_range(Rules.SWAP_MIN_TICKS, Rules.SWAP_MAX_TICKS)
+			_swap_with_random_player(player)
+
+
+func _swap_with_random_player(player: Node) -> void:
+	var others: Array = players.filter(func(p): return p and p.alive and p != player)
+	if others.is_empty():
+		return
+	var other: Node = others[_rng.randi_range(0, others.size() - 1)]
+	var here: Vector2 = player.grid_pos
+	player.teleport(other.grid_pos)
+	other.teleport(here)
+	_show_popup(player, "SWAP!", Items.color(Items.Type.SKULL).lightened(0.45))
+	_show_popup(other, "SWAP!", Items.color(Items.Type.SKULL).lightened(0.45))
+
+
+## A cursed player touching an uncursed one passes the curse on (both keep it).
+func _spread_curses() -> void:
+	for a in players:
+		if not (a and a.alive and a.stats.is_cursed()):
+			continue
+		for b in players:
+			if b and b != a and b.alive and not b.stats.is_cursed() \
+					and a.grid_pos.distance_to(b.grid_pos) < Rules.CURSE_TOUCH_DISTANCE:
+				_curse(b, a.stats.curse, a.stats.curse_ticks)
 
 
 ## Where a dead player's items may land: open floor without a bomb, a flame or a living player.

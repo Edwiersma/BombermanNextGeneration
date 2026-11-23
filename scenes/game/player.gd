@@ -38,6 +38,7 @@ var _moving := false
 var _walk_time := 0.0
 var _death_tween: Tween
 var _heart_marker: Node3D        # shown while carrying a Heart
+var _curse_label: Label3D        # curse name above the head while cursed
 var _vest_bubble: MeshInstance3D  # shown while the Safety Vest lasts
 
 
@@ -69,6 +70,7 @@ func die() -> void:
 		return
 	alive = false
 	_heart_marker.visible = false
+	_curse_label.visible = false
 	_vest_bubble.visible = false
 	_model.visible = true
 	_moving = false
@@ -103,6 +105,23 @@ func respawn(cell: Vector2i) -> void:
 	show()
 
 
+## Held directions after curses: Dizzy reverses them, Can't Stop keeps walking with none held.
+func movement_dirs(held: Array[Vector2i]) -> Array[Vector2i]:
+	var dirs: Array[Vector2i] = held.duplicate()
+	if stats.has_curse(Curses.Type.DIZZY):
+		for i in dirs.size():
+			dirs[i] = -dirs[i]
+	if stats.has_curse(Curses.Type.CANT_STOP) and dirs.is_empty() and input_enabled:
+		dirs.append(facing)
+	return dirs
+
+
+## Jump to a position (Swap curse) without sliding there.
+func teleport(pos: Vector2) -> void:
+	grid_pos = pos
+	_previous_pos = pos
+
+
 func is_carrying() -> bool:
 	return carried_bomb != -1
 
@@ -134,7 +153,7 @@ func _physics_process(delta: float) -> void:
 	_update_held_dirs()
 	if not alive:
 		return
-	var dirs: Array[Vector2i] = _held_dirs if input_enabled else ([] as Array[Vector2i])
+	var dirs := movement_dirs(_held_dirs if input_enabled else ([] as Array[Vector2i]))
 	var result := GridMovement.step(grid_pos, dirs, stats.speed() * delta, _is_blocked)
 	_moving = result.dir != Vector2i.ZERO
 	if _moving:
@@ -232,10 +251,25 @@ func _build_protection_visuals() -> void:
 	_vest_bubble.visible = false
 	add_child(_vest_bubble)
 
+	_curse_label = Label3D.new()
+	_curse_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_curse_label.no_depth_test = true
+	_curse_label.font_size = 40
+	_curse_label.pixel_size = 0.009
+	_curse_label.outline_size = 12
+	_curse_label.modulate = Items.color(Items.Type.SKULL).lightened(0.55)
+	_curse_label.position.y = 1.6
+	_curse_label.visible = false
+	add_child(_curse_label)
+
 
 func _update_protection_visuals(delta: float) -> void:
 	var now := Time.get_ticks_msec()
 	_heart_marker.visible = stats.has_heart
+	_curse_label.visible = stats.is_cursed()
+	if stats.is_cursed():
+		_curse_label.text = Curses.display_name(stats.curse)
+		_curse_label.position.y = 1.6 + sin(now / 200.0) * 0.05
 	_heart_marker.rotation.y += delta * 3.0
 	var vest_on := stats.vest_ticks > 0
 	var vest_ending := stats.vest_ticks < Rules.VEST_WARNING_TICKS

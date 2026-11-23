@@ -29,6 +29,7 @@ extends RefCounted
 ## - "remote": no fuse; goes off on detonate_oldest_remote() (or when fire reaches it).
 ## - "pierce": the blast burns through bricks out to its full range.
 ## - "power": just marks a Power Bomb for visuals (Match gives it maximum range).
+## - "fuse": fuse length in ticks instead of Rules.BOMB_FUSE_TICKS (Short / Long Fuse curses).
 ## - "mine": sinks into the floor: blocks nothing, arms once nobody stands on it, then goes off
 ##   when a player steps on it or fire reaches it.
 ## - kick()/punch() with `bouncy`: the bomb hops in random directions until its fuse runs out.
@@ -179,7 +180,7 @@ func place_bomb(cell: Vector2i, owner: int, fire_range: int, options := {}) -> b
 	bomb.cell = cell
 	bomb.owner = owner
 	bomb.fire_range = fire_range
-	bomb.fuse = Rules.BOMB_FUSE_TICKS
+	bomb.fuse = options.get("fuse", Rules.BOMB_FUSE_TICKS)
 	bomb.remote = options.get("remote", false)
 	bomb.pierce = options.get("pierce", false)
 	bomb.power = options.get("power", false)

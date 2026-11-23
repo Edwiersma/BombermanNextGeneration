@@ -5,7 +5,7 @@ extends RefCounted
 ## Items are saved by `key`, so the enum order can grow without breaking saved settings.
 
 enum Type { BOMB_UP, FIRE_UP, FULL_FIRE, SPEED_UP, SPEED_DOWN, HEART, VEST, KICK, PUNCH,
-	GLOVE, SUPER_GLOVE, LINE_BOMB, REMOTE, PIERCE, POWER_BOMB, LAND_MINE, BOUNCY }
+	GLOVE, SUPER_GLOVE, LINE_BOMB, REMOTE, PIERCE, POWER_BOMB, LAND_MINE, BOUNCY, SKULL }
 
 const NONE := -1
 
@@ -28,6 +28,7 @@ const INFO := {
 	Type.POWER_BOMB: {"key": "power_bomb", "name": "Power Bomb", "symbol": "PW", "weight": 2, "color": Color(1.0, 0.7, 0.0)},
 	Type.LAND_MINE: {"key": "land_mine", "name": "Land Mine", "symbol": "LM", "weight": 1, "color": Color(0.55, 0.42, 0.3)},
 	Type.BOUNCY: {"key": "bouncy_bomb", "name": "Bouncy Bomb", "symbol": "BO", "weight": 1, "color": Color(0.3, 0.9, 0.7)},
+	Type.SKULL: {"key": "skull", "name": "Skull", "symbol": "SK", "weight": 2, "color": Color(0.35, 0.15, 0.45)},
 }
 
 ## Items that share one slot: picking one up replaces whichever of them you had.
@@ -36,7 +37,7 @@ const SLOT_B := [Type.REMOTE, Type.PIERCE, Type.POWER_BOMB, Type.LAND_MINE, Type
 
 const IMPLEMENTED := [Type.BOMB_UP, Type.FIRE_UP, Type.FULL_FIRE, Type.SPEED_UP, Type.SPEED_DOWN,
 	Type.HEART, Type.VEST, Type.KICK, Type.PUNCH, Type.GLOVE, Type.SUPER_GLOVE, Type.LINE_BOMB,
-	Type.REMOTE, Type.PIERCE, Type.POWER_BOMB, Type.LAND_MINE, Type.BOUNCY]
+	Type.REMOTE, Type.PIERCE, Type.POWER_BOMB, Type.LAND_MINE, Type.BOUNCY, Type.SKULL]
 
 
 static func key(type: int) -> String:
