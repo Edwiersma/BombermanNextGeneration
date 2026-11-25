@@ -57,8 +57,9 @@ const START_SPEED_LEVEL := 1
 const MIN_SPEED_LEVEL := 0
 const MAX_SPEED_LEVEL := 6
 const SPEED_STEP := 0.6
-## Share of bricks hiding an item for each item-frequency setting (off, low, normal, high). VERIFY
-const ITEM_SHARE := [0.0, 0.2, 0.35, 0.55]
+## Share of bricks hiding an item for each item-frequency setting (off, low, normal, high).
+## Raised in P2-M8 so the 18 item types do not dilute Bomb Up / Fire Up too much. VERIFY
+const ITEM_SHARE := [0.0, 0.3, 0.5, 0.7]
 
 ## Heart: after it absorbs a hit you are invulnerable this long, to get out of the fire. VERIFY
 const HEART_GRACE_TICKS := 120

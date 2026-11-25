@@ -82,3 +82,17 @@ func test_closing_without_changes_keeps_ready() -> void:
 	check(GameState.lobby.ready[0], "still ready")
 	check(not FileAccess.file_exists(TEST_SETTINGS_PATH), "nothing saved")
 	_cleanup(lobby)
+
+
+func test_settings_panel_closes_when_its_pad_disconnects() -> void:
+	# Review fix: the panel only listens to the device that opened it.
+	InputRouter.release_all()
+	InputRouter.assign_slot("kb0")
+	var lobby := _open_lobby()
+	lobby._on_action("kb0", &"menu")
+	lobby._settings_panel.owner_device = "pad9"  # as if a pad had opened it and then vanished
+	lobby._on_devices_changed()
+	check(not lobby._settings_panel.visible, "closed")
+	lobby._on_action("kb0", &"bomb")
+	check(GameState.lobby.ready[0], "the lobby responds again")
+	_cleanup(lobby)

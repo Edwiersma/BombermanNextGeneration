@@ -11,10 +11,10 @@ const NONE := -1
 
 ## weight: how common it is under bricks, relative to the others (VERIFY against Generation).
 const INFO := {
-	Type.BOMB_UP: {"key": "bomb_up", "name": "Bomb Up", "symbol": "B+", "weight": 10, "color": Color(0.25, 0.45, 0.95)},
-	Type.FIRE_UP: {"key": "fire_up", "name": "Fire Up", "symbol": "F+", "weight": 10, "color": Color(1.0, 0.5, 0.1)},
+	Type.BOMB_UP: {"key": "bomb_up", "name": "Bomb Up", "symbol": "B+", "weight": 14, "color": Color(0.25, 0.45, 0.95)},
+	Type.FIRE_UP: {"key": "fire_up", "name": "Fire Up", "symbol": "F+", "weight": 14, "color": Color(1.0, 0.5, 0.1)},
 	Type.FULL_FIRE: {"key": "full_fire", "name": "Full Fire", "symbol": "FF", "weight": 1, "color": Color(0.9, 0.12, 0.1)},
-	Type.SPEED_UP: {"key": "speed_up", "name": "Speed Up", "symbol": "S+", "weight": 6, "color": Color(0.2, 0.8, 0.3)},
+	Type.SPEED_UP: {"key": "speed_up", "name": "Speed Up", "symbol": "S+", "weight": 7, "color": Color(0.2, 0.8, 0.3)},
 	Type.SPEED_DOWN: {"key": "speed_down", "name": "Speed Down", "symbol": "S-", "weight": 2, "color": Color(0.5, 0.3, 0.6)},
 	Type.HEART: {"key": "heart", "name": "Heart", "symbol": "H", "weight": 3, "color": Color(1.0, 0.35, 0.55)},
 	Type.VEST: {"key": "safety_vest", "name": "Safety Vest", "symbol": "V", "weight": 1, "color": Color(0.2, 0.85, 0.95)},

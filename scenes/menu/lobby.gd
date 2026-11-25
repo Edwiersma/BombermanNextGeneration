@@ -34,6 +34,9 @@ func _exit_tree() -> void:
 
 
 func _on_devices_changed() -> void:
+	# The pad driving the settings panel went away: close it, or nobody else could.
+	if _settings_panel.visible and not InputRouter.is_connected_device(_settings_panel.owner_device):
+		_settings_panel.handle(&"back")
 	_sync_with_router()
 	_refresh()
 

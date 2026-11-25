@@ -6,7 +6,7 @@ A local-multiplayer versus game in the style of **Bomberman Generations** (GameC
 
 ## Status
 **Phase 1** (local multiplayer, base mechanics) is playable: main menu, 4-player lobby, Bomberman-style movement, bombs and chain reactions, rounds with a clock and sudden death, results and rematch. Remaining for Phase 1: a full 4-controller browser playtest.
-**Phase 2** (in progress): match settings and items are in (the full Bomberman Generation battle item set, including the Skull and its 10 curses). Remaining: balancing and docs.
+**Phase 2** (match settings and items) is complete: a lobby settings panel and the full Bomberman Generation battle item set, from Bomb Up to the Skull and its 10 curses. Many timings and item rates are still best guesses until checked against the original; see *Tuning* below.
 
 ## Play it locally
 Requires Godot 4.7.1 with its export templates, and Python 3 for the local web server.
@@ -99,6 +99,9 @@ Not in this repository. The game draws generated placeholders when `assets_ext/`
 .\tools\link_assets.ps1 -Target <path-to>\assets\export
 ```
 Files are looked up by key, e.g. `assets_ext/textures/soft_block.png` or `assets_ext/models/bomber.glb`; see [`autoload/asset_library.gd`](autoload/asset_library.gd).
+
+## Tuning
+Gameplay numbers are constants in [`scripts/core/rules.gd`](scripts/core/rules.gd) (speeds, fuses, timers, item share per frequency, curse effects) and item rarity weights in [`scripts/core/items.gd`](scripts/core/items.gd). Change a value, re-export, and the headless tests tell you if a rule broke.
 
 ## Development helpers
 - `?scene=<name>` in the URL (or `-- --scene=<name>` on the command line) opens a scene directly: `menu`, `lobby`, `match`, `results`, `controller_test`.

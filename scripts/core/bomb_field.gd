@@ -71,6 +71,7 @@ class Bomb:
 	var fly_to := Vector2.ZERO   # target used for the arc
 	var fly_ticks := 0
 	var fly_total := 1
+	var fly_dir := Vector2i.ZERO  # direction of travel, for bounces
 
 	func is_sliding() -> bool:
 		return slide_dir != Vector2i.ZERO
@@ -224,8 +225,8 @@ func kick(cell: Vector2i, dir: Vector2i, bouncy := false) -> bool:
 		return false
 	if bouncy:
 		_bombs.erase(cell)
-		bomb.bouncing = true
-		_launch(bomb, Vector2(cell), cell + dir, Rules.BOUNCE_FLIGHT_TICKS)
+		_start_bouncing(bomb)
+		_launch(bomb, Vector2(cell), dir, 1, Rules.BOUNCE_FLIGHT_TICKS)
 		return true
 	if _blocks_slide(cell + dir):
 		return false
@@ -241,11 +242,12 @@ func punch(cell: Vector2i, dir: Vector2i, bouncy := false) -> bool:
 		return false
 	var bomb: Bomb = _bombs[cell]
 	_bombs.erase(cell)
-	bomb.bouncing = bouncy
+	if bouncy:
+		_start_bouncing(bomb)
 	var from := Vector2(cell) + Vector2(bomb.slide_dir) * bomb.offset
 	bomb.slide_dir = Vector2i.ZERO
 	bomb.offset = 0.0
-	_launch(bomb, from, cell + dir * Rules.PUNCH_DISTANCE, Rules.PUNCH_FLIGHT_TICKS)
+	_launch(bomb, from, dir, Rules.PUNCH_DISTANCE, Rules.PUNCH_FLIGHT_TICKS)
 	return true
 
 
@@ -265,7 +267,7 @@ func throw(id: int, from: Vector2i, dir: Vector2i) -> void:
 		return
 	var bomb: Bomb = _carried[id]
 	_carried.erase(id)
-	_launch(bomb, Vector2(from), from + dir * Rules.THROW_DISTANCE, Rules.THROW_FLIGHT_TICKS)
+	_launch(bomb, Vector2(from), dir, Rules.THROW_DISTANCE, Rules.THROW_FLIGHT_TICKS)
 
 
 ## Puts a carried bomb down in `cell` (the carrier died). If that cell is taken it goes to a free
@@ -380,12 +382,14 @@ func _move_sliding() -> void:
 				_stop(bomb)
 				continue
 		if bomb.offset >= 0.5:
+			# Entering the next cell: check again, it may have filled up since the centre check
+			# (a sudden-death block, a player stepping in, a scattered item).
 			var next := bomb.cell + bomb.slide_dir
-			if _bombs.has(next):
-				if _bombs[next].is_sliding():
-					_merge(bomb, _bombs[next])
-				else:
-					_stop(bomb)
+			if _bombs.has(next) and _bombs[next].is_sliding():
+				_merge(bomb, _bombs[next])
+				continue
+			if _blocks_slide(next):
+				_stop(bomb)
 				continue
 			_bombs.erase(bomb.cell)
 			bomb.cell = next
@@ -396,6 +400,15 @@ func _move_sliding() -> void:
 func _stop(bomb: Bomb) -> void:
 	bomb.offset = 0.0
 	bomb.slide_dir = Vector2i.ZERO
+
+
+## Bouncy Bomb: hops until its fuse runs out, so a remote bomb gets a normal fuse here (it could
+## never be reached by the button mid-hop).
+func _start_bouncing(bomb: Bomb) -> void:
+	bomb.bouncing = true
+	if bomb.remote:
+		bomb.remote = false
+		bomb.fuse = Rules.BOMB_FUSE_TICKS
 
 
 ## Two sliding bombs met: `a` becomes a Dangerous Bomb where it is, `b` is absorbed.
@@ -417,26 +430,29 @@ func _move_flying() -> void:
 		var landing := bomb.cell
 		if bomb.bouncing and bomb.fuse > 0:
 			var hop: Vector2i = Grid.DIRECTIONS[rng.randi_range(0, Grid.DIRECTIONS.size() - 1)]
-			_launch(bomb, Vector2(landing), landing + hop, Rules.BOUNCE_FLIGHT_TICKS)
+			_launch(bomb, Vector2(landing), hop, 1, Rules.BOUNCE_FLIGHT_TICKS)
 			continue
 		if _can_land(landing):
 			bomb.flying = false
 			_bombs[landing] = bomb
 		else:
 			# Taken: bounce one more cell in the same direction.
-			var dir := Vector2i((bomb.fly_to - bomb.fly_from).sign())
-			_launch(bomb, Vector2(landing), landing + dir, Rules.BOUNCE_FLIGHT_TICKS)
+			_launch(bomb, Vector2(landing), bomb.fly_dir, 1, Rules.BOUNCE_FLIGHT_TICKS)
 
 
-func _launch(bomb: Bomb, from: Vector2, target: Vector2i, ticks: int) -> void:
+## Sends `bomb` flying `distance` cells in `dir` from `from` (which may be off-centre when a
+## sliding bomb is punched; the landing cell is always on the grid line from the bomb's cell).
+func _launch(bomb: Bomb, from: Vector2, dir: Vector2i, distance: int, ticks: int) -> void:
+	var start := Vector2i(roundi(from.x), roundi(from.y))
+	var target := start + dir * distance
+	bomb.fly_dir = dir
 	bomb.flying = true
 	bomb.fly_from = from
 	bomb.fly_to = Vector2(target)
 	bomb.cell = _wrap_inside(target)
 	if bomb.cell != target:
 		# Wrapped around the edge: come in from just outside the far side.
-		var dir := (Vector2(target) - from).normalized()
-		bomb.fly_from = Vector2(bomb.cell) - dir
+		bomb.fly_from = Vector2(bomb.cell) - Vector2(dir)
 		bomb.fly_to = Vector2(bomb.cell)
 	bomb.fly_ticks = ticks
 	bomb.fly_total = ticks
@@ -473,6 +489,8 @@ func _all_bombs() -> Array:
 func _blast(bomb: Bomb) -> Array:
 	var flames: Array = [_flame(bomb.cell, Flame.CENTER, Vector2i.ZERO)]
 	_ignite(bomb.cell)
+	if items != null and items.has_item(bomb.cell):
+		items.burn(bomb.cell)  # a bomb that landed or was dropped on an item
 	for dir: Vector2i in Grid.DIRECTIONS:
 		for dist in range(1, bomb.fire_range + 1):
 			var cell: Vector2i = bomb.cell + dir * dist

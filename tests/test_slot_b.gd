@@ -156,3 +156,14 @@ func test_bomb_flags() -> void:
 	var flags := field.bomb_flags(1)
 	check(flags.remote and flags.pierce and not flags.mine, "flags: %s" % flags)
 	check(field.bomb_flags(99).is_empty(), "unknown id")
+
+
+func test_bouncy_kicked_remote_bomb_still_explodes() -> void:
+	# Review fix: a remote bomb sent bouncing used to hop forever (no fuse, out of the button's reach).
+	var field := _field(["#########", "#.......#", "#.......#", "#.......#", "#########"])
+	field.rng.seed = 5
+	field.place_bomb(Vector2i(4, 2), 0, 1, {"remote": true})
+	field.kick(Vector2i(4, 2), Vector2i.RIGHT, true)
+	_ticks(field, Rules.BOMB_FUSE_TICKS + Rules.BOUNCE_FLIGHT_TICKS * 4)
+	check_eq(exploded.size(), 1, "exploded")
+	check_eq(field.bomb_count(0), 0, "owner got the bomb back")

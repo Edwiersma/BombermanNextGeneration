@@ -279,3 +279,47 @@ func test_slot_a_items_replace_each_other() -> void:
 	check(stats.has_super_glove() and stats.has_glove() and not stats.has_line_bomb(), "super glove counts as a glove")
 	stats.reset(MatchSettings.new())
 	check_eq(stats.slot_a, Items.NONE, "reset each round")
+
+
+func test_slide_stops_for_something_that_appears_ahead() -> void:
+	# Review fix: the next cell was only checked at the cell centre.
+	var field := _field(CORRIDOR)
+	field.place_bomb(Vector2i(2, 1), 0, 2)
+	field.kick(Vector2i(2, 1), RIGHT)
+	field.tick()
+	field.grid.set_cell(Vector2i(3, 1), Grid.Cell.HARD)  # a sudden-death block lands just ahead
+	_ticks(field, 30)
+	check(field.has_bomb(Vector2i(2, 1)), "stayed out of the new block")
+	check(not field.is_sliding(Vector2i(2, 1)), "stopped")
+
+
+func test_punching_a_sliding_bomb_sideways_bounces_straight() -> void:
+	# Review fix: the bounce direction came from an off-axis start point and could go diagonal.
+	var field := _field([
+		"#######",
+		"#.....#",
+		"#.....#",
+		"#.....#",
+		"#.#...#",
+		"#.....#",
+		"#######",
+	])
+	field.place_bomb(Vector2i(2, 1), 0, 2)
+	field.kick(Vector2i(2, 1), RIGHT)
+	field.tick()
+	field.tick()                       # sliding, slightly past the centre of (2, 1)
+	field.punch(Vector2i(2, 1), Vector2i.DOWN)  # lands on (2, 4), a pillar: bounce on
+	_ticks(field, Rules.PUNCH_FLIGHT_TICKS + Rules.BOUNCE_FLIGHT_TICKS + 2)
+	check(field.has_bomb(Vector2i(2, 5)), "bounced straight down to (2, 5)")
+
+
+func test_bomb_landing_on_an_item_burns_it_when_it_explodes() -> void:
+	# Review fix: the centre cell of a normal blast did not burn floor items.
+	var field := _field(CORRIDOR)
+	var items := ItemField.new(field.grid)
+	field.items = items
+	items.place(Vector2i(5, 1), Items.Type.FIRE_UP)
+	field.place_bomb(Vector2i(2, 1), 0, 1)
+	field.punch(Vector2i(2, 1), RIGHT)  # lands on the item at (5, 1)
+	_ticks(field, Rules.BOMB_FUSE_TICKS + 2)
+	check(not items.has_item(Vector2i(5, 1)), "burnt by its own bomb")
