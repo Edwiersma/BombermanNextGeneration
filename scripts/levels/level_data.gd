@@ -5,11 +5,14 @@ extends Resource
 ##   +    soft block, always placed
 ##   ?    soft block placed with probability random_soft_chance
 ##   .    empty floor
-##   1-4  spawn point for that player slot (empty floor)
-## A spawn cell and its 4 neighbours never get a soft block, whatever the layout says.
+##   1-4  spawn point for the 1st..4th player (empty floor)
+##   5-6  spawn point for a 5th / 6th player; a soft block when fewer play (optional)
+## Players take spawns in order, so any four players start in spawns 1-4. A spawn in use and its
+## 4 neighbours never get a soft block, whatever the layout says.
 
-const MAX_SPAWNS := 4
-const LEGEND := "#+?.1234"
+const MAX_SPAWNS := 6
+const REQUIRED_SPAWNS := 4
+const LEGEND := "#+?.123456"
 
 @export var display_name := ""
 @export var layout := PackedStringArray()
@@ -45,17 +48,21 @@ func validate() -> PackedStringArray:
 			var on_border := x == 0 or y == 0 or x == w - 1 or y == h - 1
 			if on_border and ch != "#":
 				errors.append("border cell (%d, %d) must be '#'" % [x, y])
-			if ch in "1234":
+			if ch in "123456":
 				spawn_counts[ch] = spawn_counts.get(ch, 0) + 1
 	for n in MAX_SPAWNS:
 		var key := str(n + 1)
-		if spawn_counts.get(key, 0) != 1:
+		var count: int = spawn_counts.get(key, 0)
+		if n < REQUIRED_SPAWNS and count != 1:
 			errors.append("spawn %s must appear exactly once" % key)
+		elif n >= REQUIRED_SPAWNS and count > 1:
+			errors.append("spawn %s may appear once at most" % key)
 	return errors
 
 
-## Builds a fresh Grid. The RNG only affects '?' cells, so the same seed gives the same grid.
-func build_grid(rng: RandomNumberGenerator) -> Grid:
+## Builds a fresh Grid for `player_count` players. The RNG only affects '?' cells, so the same
+## seed gives the same grid.
+func build_grid(rng: RandomNumberGenerator, player_count := REQUIRED_SPAWNS) -> Grid:
 	var errors := validate()
 	if not errors.is_empty():
 		push_error("Level '%s' is invalid: %s" % [display_name, "; ".join(errors)])
@@ -76,11 +83,15 @@ func build_grid(rng: RandomNumberGenerator) -> Grid:
 			elif ch == "?":
 				if rng.randf() < random_soft_chance:
 					grid.set_cell(cell, Grid.Cell.SOFT)
-			elif ch in "1234":
-				grid.spawns[int(ch) - 1] = cell
+			elif ch in "123456":
+				var index := int(ch) - 1
+				grid.spawns[index] = cell
+				if index >= maxi(player_count, REQUIRED_SPAWNS):
+					grid.set_cell(cell, Grid.Cell.SOFT)  # optional spawn nobody uses
 
-	for spawn in grid.spawns:
-		if spawn == Grid.NO_SPAWN:
+	for index in grid.spawns.size():
+		var spawn := grid.spawns[index]
+		if spawn == Grid.NO_SPAWN or index >= maxi(player_count, REQUIRED_SPAWNS):
 			continue
 		_clear_soft(grid, spawn)
 		for dir in Grid.DIRECTIONS:

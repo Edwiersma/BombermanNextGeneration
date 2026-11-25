@@ -59,10 +59,16 @@ func _ready() -> void:
 	_connect_rules()
 
 	players.resize(InputRouter.MAX_SLOTS)
-	for slot in InputRouter.MAX_SLOTS:
-		var device := InputRouter.device_in_slot(slot)
-		if device != "":
+	if GameState.in_session:
+		# The versus screen's line-up: humans on their controllers, AI slots as idle players.
+		for slot in GameState.lobby.participants():
+			var device := InputRouter.device_in_slot(slot) if GameState.lobby.is_human(slot) else InputRouter.AI_DEVICE
 			_spawn_player(slot, device)
+	else:
+		for slot in InputRouter.MAX_SLOTS:
+			var device := InputRouter.device_in_slot(slot)
+			if device != "":
+				_spawn_player(slot, device)
 	InputRouter.action_pressed.connect(_on_action_pressed)
 	debug_label.visible = allow_drop_in
 	_pause_menu = PauseMenu.new()
@@ -250,9 +256,7 @@ func _enter_join_phase() -> void:
 		_begin_match()  # lobby match: straight in (it builds its own arena)
 		return
 	_build_arena()
-	for player in players:
-		if player:
-			player.respawn(grid.spawns[player.slot])
+	_respawn_all()
 	hud.show_clock(false)
 	hud.setup_players(_joined_slots())
 	hud.set_wins({})
@@ -273,12 +277,12 @@ func _begin_match() -> void:
 
 
 func _start_round() -> void:
-	_build_arena()
+	_build_arena(rules.participants.size())
 	var settings := GameState.settings
 	if settings.items_active():
 		items.hide_items(_rng, settings.item_frequency, settings.enabled_item_types())
 	for slot in rules.participants:
-		players[slot].respawn(grid.spawns[slot])
+		players[slot].respawn(_spawn_cell(slot))
 		players[slot].reset_stats(GameState.settings)
 		hud.set_alive(slot, true)
 	_set_input(false)
@@ -438,9 +442,10 @@ func _is_free_for_items(cell: Vector2i) -> bool:
 
 # --- Arena, players, effects -------------------------------------------------
 
-## Fresh grid, arena and bombs (each round, and for the join phase).
-func _build_arena() -> void:
-	grid = level.build_grid(_rng)
+## Fresh grid, arena and bombs (each round, and for the join phase). Optional spawns (5th, 6th
+## player) are only cleared when that many play; the join phase keeps them all open.
+func _build_arena(player_count := LevelData.MAX_SPAWNS) -> void:
+	grid = level.build_grid(_rng, player_count)
 	arena.build(grid)
 	for child in effects.get_children():
 		child.queue_free()
@@ -474,6 +479,22 @@ func _joined_slots() -> Array[int]:
 	return slots
 
 
+## Spawn point for `slot`: players take the level's spawns in slot order, so any four players
+## start in the corners whichever slots they sit in.
+func _spawn_cell(slot: int) -> Vector2i:
+	var order := _joined_slots()
+	var index := order.find(slot)
+	if index == -1:
+		index = order.filter(func(s): return s < slot).size()  # not in the list yet: where it will go
+	return grid.spawns[index] if index < grid.spawns.size() else Grid.NO_SPAWN
+
+
+func _respawn_all() -> void:
+	for player in players:
+		if player:
+			player.respawn(_spawn_cell(player.slot))
+
+
 func _player_name(slot: int) -> String:
 	return GameState.color_name(slot).to_upper()
 
@@ -489,6 +510,7 @@ func _on_action_pressed(device: String, action: StringName) -> void:
 		slot = InputRouter.assign_slot(device)
 		if slot != -1:
 			_spawn_player(slot, device)
+			_respawn_all()  # a lower slot joining moves the others along the spawn order
 			hud.setup_players(_joined_slots())
 			hud.announce("PRESS START")
 			_update_hint()
@@ -497,7 +519,7 @@ func _on_action_pressed(device: String, action: StringName) -> void:
 
 
 func _spawn_player(slot: int, device: String) -> void:
-	var spawn := grid.spawns[slot]
+	var spawn := _spawn_cell(slot)
 	if spawn == Grid.NO_SPAWN:
 		push_error("Level has no spawn for slot %d" % slot)
 		return

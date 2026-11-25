@@ -14,7 +14,10 @@ signal action_released(device_id: String, action: StringName)
 signal devices_changed
 signal slots_changed
 
-const MAX_SLOTS := 4
+const MAX_SLOTS := 6
+## Device id for AI players: never connected, never pressed, so its player just stands still
+## until AI logic exists.
+const AI_DEVICE := "ai"
 const STICK_DEADZONE := 0.5
 
 const ACTIONS := [&"up", &"down", &"left", &"right", &"bomb", &"special", &"back", &"start", &"menu"]
@@ -194,6 +197,27 @@ func assign_slot(device: String) -> int:
 			slots_changed.emit()
 			return i
 	return -1
+
+
+## Puts the device in a specific slot (the versus screen decides which). False if it is taken.
+func assign_to(device: String, slot: int) -> bool:
+	if slot < 0 or slot >= MAX_SLOTS or (slots[slot] != "" and slots[slot] != device):
+		return false
+	var existing := slot_of(device)
+	if existing != -1:
+		slots[existing] = ""
+	slots[slot] = device
+	slots_changed.emit()
+	return true
+
+
+## Connected pads that are not in a slot yet.
+func spare_pads() -> Array[String]:
+	var pads: Array[String] = []
+	for device in _devices:
+		if is_pad(device) and slot_of(device) == -1:
+			pads.append(device)
+	return pads
 
 
 func release_slot(slot: int) -> void:

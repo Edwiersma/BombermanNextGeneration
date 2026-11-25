@@ -2,7 +2,7 @@ extends Node
 ## Session state shared between main menu, lobby, match and results.
 ## Device-to-slot mapping lives in InputRouter; everything else a match needs lives here.
 
-## Colour and ready flag per slot, kept across matches so a rematch keeps everyone's choices.
+## Versus screen choices per slot (kind, portrait), kept across matches so a rematch keeps them.
 var lobby := LobbyState.new()
 ## Match parameters from the lobby settings panel; saved with save_settings().
 var settings := MatchSettings.load_or_default()
@@ -19,8 +19,7 @@ var last_results := {}
 ## Palette index for a slot: the lobby choice, or the slot's default when it never went
 ## through the lobby (dev drop-in matches, tests).
 func color_index(slot: int) -> int:
-	var chosen := lobby.colors[slot]
-	return chosen if chosen != LobbyState.NO_COLOR else slot
+	return lobby.color_index(slot)
 
 
 func color_of(slot: int) -> Color:

@@ -27,8 +27,16 @@ func _ready() -> void:
 
 	var slots: Array = wins.keys()
 	slots.sort_custom(func(a, b): return wins[a] > wins[b] or (wins[a] == wins[b] and a < b))
+	# Up to six players: two columns of smaller rows once there are more than three.
+	var compact := slots.size() > 3
+	var table := GridContainer.new()
+	table.columns = 2 if compact else 1
+	table.add_theme_constant_override("h_separation", 16)
+	table.add_theme_constant_override("v_separation", 10 if compact else 16)
+	table.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	column.add_child(table)
 	for slot: int in slots:
-		column.add_child(_result_row(slot, wins[slot], slot == winner))
+		table.add_child(_result_row(slot, wins[slot], slot == winner, compact))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size.y = 24
@@ -50,27 +58,31 @@ func _ready() -> void:
 	add_child(_navigator)
 
 
-func _result_row(slot: int, wins: int, is_winner: bool) -> Control:
+func _result_row(slot: int, wins: int, is_winner: bool, compact: bool) -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(520, 0)
+	panel.custom_minimum_size = Vector2(380 if compact else 520, 0)
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var border := GameState.color_of(slot) if is_winner else UI.PANEL
-	panel.add_theme_stylebox_override("panel", UI.panel_style(UI.PANEL, 14, 4, border))
+	var style := UI.panel_style(UI.PANEL, 14, 4, border)
+	if compact:
+		style.set_content_margin_all(8)
+	panel.add_theme_stylebox_override("panel", style)
+	var font_size := 24 if compact else 30
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 18)
 	panel.add_child(row)
 
 	var swatch := Panel.new()
-	swatch.custom_minimum_size = Vector2(44, 44)
+	swatch.custom_minimum_size = Vector2(36, 36) if compact else Vector2(44, 44)
 	swatch.add_theme_stylebox_override("panel", UI.panel_style(GameState.color_of(slot), 22, 3, Color.BLACK))
 	row.add_child(swatch)
 
-	var name_label := UI.label(GameState.color_name(slot).to_upper(), 30)
+	var name_label := UI.label(GameState.color_name(slot).to_upper(), font_size)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(name_label)
 
-	var wins_label := UI.label("%d %s" % [wins, "win" if wins == 1 else "wins"], 30, UI.ACCENT if is_winner else Color.WHITE)
+	var wins_label := UI.label("%d %s" % [wins, "win" if wins == 1 else "wins"], font_size, UI.ACCENT if is_winner else Color.WHITE)
 	row.add_child(wins_label)
 	return panel

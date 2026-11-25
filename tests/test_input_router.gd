@@ -25,11 +25,21 @@ func test_same_device_keeps_its_slot() -> void:
 	router.release_all()
 
 
-func test_full_lobby_refuses_a_fifth_device() -> void:
+func test_full_lobby_refuses_a_seventh_device() -> void:
 	var router := _router()
-	for device in ["kb0", "kb1", "pad0", "pad1"]:
+	for device in ["kb0", "kb1", "pad0", "pad1", "pad2", "pad3"]:
 		router.assign_slot(device)
-	check_eq(router.assign_slot("pad2"), -1, "no fifth slot")
+	check_eq(router.assign_slot("pad4"), -1, "no seventh slot")
+	router.release_all()
+
+
+func test_assign_to_a_given_slot() -> void:
+	var router := _router()
+	check(router.assign_to("kb1", 3), "placed")
+	check_eq(router.slot_of("kb1"), 3, "in slot 4")
+	check(not router.assign_to("kb0", 3), "taken")
+	check(router.assign_to("kb1", 5), "moves")
+	check_eq(router.device_in_slot(3), "", "old slot freed")
 	router.release_all()
 
 

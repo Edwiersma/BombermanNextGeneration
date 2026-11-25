@@ -3,8 +3,8 @@ extends "res://tests/test_suite.gd"
 const CLASSIC := preload("res://levels/classic.tres")
 
 
-func _classic() -> Grid:
-	return CLASSIC.build_grid(RandomNumberGenerator.new())
+func _classic(players := 4) -> Grid:
+	return CLASSIC.build_grid(RandomNumberGenerator.new(), players)
 
 
 func _level(rows: Array, chance := 0.0) -> LevelData:
@@ -41,17 +41,36 @@ func test_pillars_on_even_cells() -> void:
 			check_eq(grid.get_cell(cell) == Grid.Cell.HARD, is_pillar, "pillar at %s" % cell)
 
 
-func test_spawns_in_corners() -> void:
+func test_spawns_in_corners_then_top_and_bottom_middle() -> void:
 	var grid := _classic()
-	check_eq(grid.spawns, [Vector2i(1, 1), Vector2i(13, 1), Vector2i(1, 11), Vector2i(13, 11)] as Array[Vector2i], "spawns")
+	check_eq(grid.spawns, [Vector2i(1, 1), Vector2i(13, 1), Vector2i(1, 11), Vector2i(13, 11),
+		Vector2i(7, 1), Vector2i(7, 11)] as Array[Vector2i], "spawns")
 
 
 func test_spawn_area_is_clear() -> void:
-	var grid := _classic()
-	for spawn in grid.spawns:
-		check_eq(grid.get_cell(spawn), Grid.Cell.EMPTY, "spawn %s" % spawn)
-		for dir in Grid.DIRECTIONS:
-			check(grid.get_cell(spawn + dir) != Grid.Cell.SOFT, "soft block next to spawn %s" % spawn)
+	for players in [4, 5, 6]:
+		var grid := _classic(players)
+		for i in players:
+			var spawn := grid.spawns[i]
+			check_eq(grid.get_cell(spawn), Grid.Cell.EMPTY, "%d players: spawn %s" % [players, spawn])
+			for dir in Grid.DIRECTIONS:
+				check(grid.get_cell(spawn + dir) != Grid.Cell.SOFT, "%d players: soft block next to spawn %s" % [players, spawn])
+
+
+func test_unused_optional_spawns_stay_bricks() -> void:
+	# The original 4-player layout has bricks where the 5th and 6th players would start.
+	var grid := _classic(2)
+	check_eq(grid.get_cell(Vector2i(7, 1)), Grid.Cell.SOFT, "spawn 5 is a brick")
+	check_eq(grid.get_cell(Vector2i(7, 2)), Grid.Cell.SOFT, "and so is its neighbour")
+	grid = _classic(5)
+	check_eq(grid.get_cell(Vector2i(7, 1)), Grid.Cell.EMPTY, "5 players: spawn 5 open")
+	check_eq(grid.get_cell(Vector2i(7, 11)), Grid.Cell.SOFT, "but spawn 6 still a brick")
+
+
+func test_optional_spawns_may_be_missing_but_not_doubled() -> void:
+	check_eq(_level(["#####", "#1.2#", "#...#", "#3.4#", "#####"]).validate(), PackedStringArray(), "no 5/6 is fine")
+	var errors := _level(["#####", "#152#", "#.5.#", "#3.4#", "#####"]).validate()
+	check("spawn 5" in " | ".join(errors), "doubled spawn 5 reported: %s" % [errors])
 
 
 func test_out_of_bounds_reads_hard() -> void:

@@ -1,6 +1,6 @@
 class_name Palette
 extends RefCounted
-## Player colors offered in the lobby. Slot N defaults to color N.
+## Player colors offered in the lobby (one portrait each). Slot N defaults to color N.
 
 const PLAYER_COLORS := [
 	Color(0.96, 0.96, 0.96),  # White
@@ -14,6 +14,16 @@ const PLAYER_COLORS := [
 ]
 
 const PLAYER_COLOR_NAMES := ["White", "Black", "Red", "Blue", "Green", "Yellow", "Pink", "Aqua"]
+
+## Versus screen cursor and tag colour per player number (P1..P6), apart from the bomber colours.
+const CURSOR_COLORS := [
+	Color(0.95, 0.27, 0.25),  # P1 red
+	Color(0.27, 0.56, 1.00),  # P2 blue
+	Color(1.00, 0.84, 0.20),  # P3 yellow
+	Color(0.33, 0.88, 0.40),  # P4 green
+	Color(0.76, 0.45, 1.00),  # P5 purple
+	Color(1.00, 0.58, 0.18),  # P6 orange
+]
 
 
 ## Readable text color on top of a player color.

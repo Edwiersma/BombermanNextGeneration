@@ -1,28 +1,45 @@
 extends Control
-## Lobby: up to 4 players join on their own device, pick a colour and ready up.
-##   Join, then ready:  Cross / Space / Enter
-##   Colour:            left / right (until ready)
-##   Back:              un-ready, then leave; with nobody joined, back to the main menu
-##   Start:             begin once everyone joined is ready (1 player = practice)
-##   Menu:              match settings (Triangle / Q / Delete), driven by whoever opened it
+## Versus screen. Left two thirds: the portrait grid (7 on top, 8 below, Random at the far right)
+## and the six player slots under it; right third: the match settings. The rules of the screen
+## live in LobbyState; this scene routes input and draws.
+##   Join:      Cross / Space / Enter on a new controller (takes the next free slot, gets a cursor)
+##   Move:      d-pad / left stick / WASD / arrows (hold to repeat)
+##   Cross:     claim the portrait under the cursor; on a slot card, toggle Off / Player / AI
+##   Back:      drop your portrait, then leave; with nobody joined, back to the main menu
+##   Start:     begin once every player has a portrait (one participant = practice)
+##   Settings:  move right past the end of a row (or Triangle / Q / Delete); left or Back leaves.
+##              One player at a time.
 
-const CORNERS := ["top-left", "top-right", "bottom-left", "bottom-right"]
-const SettingsPanel := preload("res://scenes/menu/settings_panel.gd")
-const JOIN_TEXT := "Press Cross / Space / Enter\nto join"
+const PortraitTile := preload("res://scenes/menu/portrait_tile.gd")
+const SlotCard := preload("res://scenes/menu/slot_card.gd")
+const SettingsSection := preload("res://scenes/menu/settings_panel.gd")
+
+const DIRECTIONS := {&"up": Vector2i.UP, &"down": Vector2i.DOWN, &"left": Vector2i.LEFT, &"right": Vector2i.RIGHT}
+const REPEAT_DELAY := 0.38
+const REPEAT_INTERVAL := 0.11
+const FLASH_SECONDS := 1.6
+const WARN := Color(1.0, 0.45, 0.35)
+const HINTS := ("Move: D-pad / Left stick     Pick, toggle a slot: Cross     Back: Circle     Start: Options     Settings: move past the right edge\n"
+	+ "Keyboard: WASD + Space, Esc, Tab, Q     or     Arrows + Enter, Backspace, P, Delete")
 
 var _lobby: LobbyState
-var _cards: Array[Dictionary] = []
+var _tiles: Array = []  # PortraitTile per portrait
+var _cards: Array = []  # SlotCard per slot
+var _settings_section: SettingsSection
 var _prompt: Label
-var _summary: Label
-var _settings_panel: Control
 var _starting := false  # START accepted; ignore further presses until the match loads
+var _rng := RandomNumberGenerator.new()
+var _repeat := {}  # slot -> {"action": StringName, "time": float} for held directions
+var _flash_text := ""
+var _flash_left := 0.0
 
 
 func _ready() -> void:
+	_rng.randomize()
 	_lobby = GameState.lobby
-	_lobby.unready_all()
-	_sync_with_router()
+	_lobby.prepare()
 	_build_ui()
+	_sync_with_router()
 	InputRouter.action_pressed.connect(_on_action)
 	InputRouter.devices_changed.connect(_on_devices_changed)
 	_refresh()
@@ -33,69 +50,172 @@ func _exit_tree() -> void:
 	InputRouter.devices_changed.disconnect(_on_devices_changed)
 
 
+func _process(delta: float) -> void:
+	if _flash_left > 0.0:
+		_flash_left -= delta
+		if _flash_left <= 0.0:
+			_refresh_prompt()
+	_repeat_held_directions(delta)
+
+
 func _on_devices_changed() -> void:
-	# The pad driving the settings panel went away: close it, or nobody else could.
-	if _settings_panel.visible and not InputRouter.is_connected_device(_settings_panel.owner_device):
-		_settings_panel.handle(&"back")
 	_sync_with_router()
 	_refresh()
 
 
-## Keeps lobby choices and InputRouter slots in agreement (e.g. after a dev match). A pad that
-## disconnected keeps its slot during a match so it can rejoin, but in the lobby it would block
-## START forever (it can never ready up or leave), so its slot is freed here.
+## Keeps slot kinds and InputRouter slots in agreement (e.g. after a dev match). A pad that
+## disconnected keeps its slot during a match so it can rejoin, but here it would block START
+## forever (it can never pick or leave), so its slot is freed. If it was in the settings, they
+## close (saving any change), or nobody else could get in.
 func _sync_with_router() -> void:
-	for slot in InputRouter.MAX_SLOTS:
+	var has_device: Array[bool] = []
+	for slot in LobbyState.SLOT_COUNT:
 		var device := InputRouter.device_in_slot(slot)
 		if device != "" and not InputRouter.is_connected_device(device):
 			InputRouter.release_slot(slot)
-		var has_device := InputRouter.device_in_slot(slot) != ""
-		if has_device and not _lobby.is_joined(slot):
-			_lobby.join(slot)
-		elif not has_device and _lobby.is_joined(slot):
-			_lobby.leave(slot)
+			device = ""
+		has_device.append(device != "")
+	_lobby.sync_devices(has_device)
+	if _settings_section.is_focused() and _lobby.settings_owner == LobbyState.NONE:
+		_close_settings()
 
 
 func _on_action(device: String, action: StringName) -> void:
 	if _starting:
 		return
-	if _settings_panel.visible:
-		if device == _settings_panel.owner_device:
-			_settings_panel.handle(action)
-		return
+	_flash_left = 0.0  # a message answers the latest press only
 	var slot := InputRouter.slot_of(device)
 	if slot == -1:
 		if action == &"bomb":
-			slot = InputRouter.assign_slot(device)
-			if slot != -1:
-				_lobby.join(slot)
-		elif action == &"back" and _lobby.joined_count() == 0:
+			_join(device)
+		elif action == &"back" and _lobby.humans().is_empty():
 			Scenes.go(Scenes.MENU)
 			return
+	elif action == &"start":
+		if _lobby.can_start():
+			_start_match()
+			return
+		_flash(_waiting_text())
+	elif _lobby.cursor_area[slot] == LobbyState.Area.SETTINGS:
+		_settings_action(slot, action)
 	else:
-		match action:
-			&"left":
-				_lobby.cycle_color(slot, -1)
-			&"right":
-				_lobby.cycle_color(slot, 1)
-			&"bomb":
-				_lobby.set_ready(slot, true)
-			&"back":
-				if _lobby.ready[slot]:
-					_lobby.set_ready(slot, false)
-				else:
-					_lobby.leave(slot)
-					InputRouter.release_slot(slot)
-			&"menu":
-				_settings_panel.open(device, GameState.settings)
-				return
-			&"start":
-				if _lobby.can_start():
-					_starting = true
-					GameState.in_session = true
-					Scenes.go(Scenes.MATCH)
-					return
+		_cursor_action(slot, action)
 	_refresh()
+
+
+func _join(device: String) -> void:
+	var slot := _lobby.free_slot()
+	if slot == LobbyState.NONE:
+		_flash("All %d slots are taken" % LobbyState.SLOT_COUNT)
+	elif InputRouter.assign_to(device, slot):
+		_lobby.add_player(slot)
+
+
+func _cursor_action(slot: int, action: StringName) -> void:
+	if DIRECTIONS.has(action):
+		if _lobby.move_cursor(slot, DIRECTIONS[action]):
+			if _lobby.cursor_area[slot] == LobbyState.Area.SETTINGS:
+				_settings_section.focus(slot)
+		elif action == &"right" and _lobby.settings_owner != LobbyState.NONE:
+			_flash_settings_busy()  # right only fails at the right edge: the settings are taken
+		return
+	match action:
+		&"bomb":
+			var index := _lobby.cursor_index[slot]
+			if _lobby.cursor_area[slot] == LobbyState.Area.SLOTS:
+				_toggle_slot(index)
+			elif not _lobby.claim(slot):
+				var holder := _lobby.claimed_by(index)
+				_flash("Locked" if LobbyState.is_locked(index) else "Taken by P%d" % (holder + 1))
+		&"back":
+			if _lobby.has_pick(slot):
+				_lobby.unclaim(slot)
+			else:
+				_lobby.set_off(slot)
+				InputRouter.release_slot(slot)
+		&"menu":
+			if _lobby.enter_settings(slot):
+				_settings_section.focus(slot)
+			else:
+				_flash_settings_busy()
+
+
+## Cross on a slot card: Off -> Player (a spare connected pad takes it) -> AI -> Off.
+func _toggle_slot(target: int) -> void:
+	var spare := InputRouter.spare_pads()
+	match _lobby.next_kind(target, not spare.is_empty()):
+		LobbyState.Kind.PLAYER:
+			if _lobby.kinds[target] == LobbyState.Kind.OFF and InputRouter.assign_to(spare[0], target):
+				_lobby.add_player(target)
+		LobbyState.Kind.AI:
+			_lobby.add_ai(target)
+		LobbyState.Kind.OFF:
+			_lobby.set_off(target)
+
+
+func _settings_action(slot: int, action: StringName) -> void:
+	if action == &"menu" or not _settings_section.handle(action):
+		_close_settings()
+		_lobby.leave_settings(slot)
+
+
+## The owner is done with the settings: save them if they changed.
+func _close_settings() -> void:
+	if _settings_section.unfocus():
+		GameState.save_settings()
+
+
+func _start_match() -> void:
+	var owner := _lobby.settings_owner
+	if owner != LobbyState.NONE:
+		_close_settings()
+		_lobby.leave_settings(owner)
+	_lobby.resolve_picks(_rng)
+	_starting = true
+	GameState.in_session = true
+	Scenes.go(Scenes.MATCH)
+
+
+## Holding a direction keeps moving: the first step comes from the press itself, then repeats.
+func _repeat_held_directions(delta: float) -> void:
+	for slot in LobbyState.SLOT_COUNT:
+		var device := InputRouter.device_in_slot(slot)
+		var action := _held_direction(device) if device != "" else &""
+		var state: Dictionary = _repeat.get(slot, {})
+		if action == &"":
+			_repeat.erase(slot)
+		elif state.get("action", &"") != action:
+			_repeat[slot] = {"action": action, "time": 0.0}
+		else:
+			state.time += delta
+			if state.time >= REPEAT_DELAY:
+				state.time -= REPEAT_INTERVAL
+				_on_action(device, action)
+
+
+func _held_direction(device: String) -> StringName:
+	for action: StringName in DIRECTIONS:
+		if InputRouter.is_held(device, action):
+			return action
+	return &""
+
+
+func _flash(text: String) -> void:
+	_flash_text = text
+	_flash_left = FLASH_SECONDS
+	_refresh_prompt()
+
+
+func _flash_settings_busy() -> void:
+	_flash("P%d is changing the settings" % (_lobby.settings_owner + 1))
+
+
+func _waiting_text() -> String:
+	var waiting: Array[String] = []
+	for slot in _lobby.humans():
+		if not _lobby.has_pick(slot):
+			waiting.append("P%d" % (slot + 1))
+	return "Waiting for %s to pick" % ", ".join(waiting)
 
 
 # --- UI ----------------------------------------------------------------------
@@ -103,121 +223,108 @@ func _on_action(device: String, action: StringName) -> void:
 func _build_ui() -> void:
 	UI.add_background(self)
 
-	var column := VBoxContainer.new()
-	column.set_anchors_preset(Control.PRESET_FULL_RECT)
-	column.add_theme_constant_override("separation", 24)
-	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	add_child(column)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 16)
+	add_child(margin)
+	var split := HBoxContainer.new()
+	split.add_theme_constant_override("separation", 16)
+	margin.add_child(split)
 
-	column.add_child(UI.title("VERSUS", 64))
-	_summary = UI.label("", 24, UI.DIM)
-	column.add_child(_summary)
+	# Left two thirds: portraits, slots, prompt.
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_stretch_ratio = 2.0
+	left.alignment = BoxContainer.ALIGNMENT_CENTER
+	left.add_theme_constant_override("separation", 12)
+	split.add_child(left)
 
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 20)
-	column.add_child(row)
-	for slot in InputRouter.MAX_SLOTS:
-		var card := _make_card(slot)
-		row.add_child(card.panel)
+	var title_row := HBoxContainer.new()
+	title_row.add_child(UI.title("VERSUS", 44))
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(gap)
+	title_row.add_child(UI.label("Stage: %s" % GameState.level.display_name, 18, UI.DIM, 4))
+	left.add_child(title_row)
+
+	var portrait_rows: Array[HBoxContainer] = [HBoxContainer.new(), HBoxContainer.new()]
+	var grid := VBoxContainer.new()
+	grid.add_theme_constant_override("separation", 8)
+	left.add_child(grid)
+	for row in portrait_rows:
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 8)
+		grid.add_child(row)
+	for portrait in LobbyState.PORTRAIT_COUNT:
+		var tile := PortraitTile.new(portrait)
+		portrait_rows[LobbyState.portrait_row(portrait)].add_child(tile)
+		_tiles.append(tile)
+
+	var card_row := HBoxContainer.new()
+	card_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	card_row.add_theme_constant_override("separation", 8)
+	left.add_child(card_row)
+	for slot in LobbyState.SLOT_COUNT:
+		var card := SlotCard.new(slot)
+		card_row.add_child(card)
 		_cards.append(card)
 
-	_prompt = UI.label("", 34, UI.ACCENT, 8)
-	column.add_child(_prompt)
-	column.add_child(UI.label("Colour: Left / Right      Back: Circle / Esc / Backspace      Start: Options / Tab / P      Settings: Triangle / Q / Delete", 18, UI.DIM, 4))
+	_prompt = UI.label("", 26, UI.ACCENT, 8)
+	left.add_child(_prompt)
+	left.add_child(UI.label(HINTS, 13, UI.DIM, 4))
 
-	_settings_panel = SettingsPanel.new()
-	add_child(_settings_panel)
-	_settings_panel.closed.connect(_on_settings_closed)
-
-
-func _on_settings_closed(changed: bool) -> void:
-	if changed:
-		GameState.save_settings()
-		_lobby.unready_all()  # everyone agrees to the new rules again
-	_refresh()
-
-
-func _settings_summary() -> String:
-	var s := GameState.settings
-	var parts: Array[String] = [
-		"Stage: %s" % GameState.level.display_name,
-		"First to %d" % s.wins_to_win,
-		"Time %s" % s.value_text("round_seconds"),
-		"Sudden death %s" % s.value_text("sudden_death").to_lower(),
-		"Items %s" % (s.value_text("item_frequency").to_lower() if s.items_active() else "off"),
-	]
-	if s.start_bombs != Rules.START_BOMBS or s.start_fire != Rules.START_FIRE:
-		parts.append("Start %d bomb%s / fire %d" % [s.start_bombs, "" if s.start_bombs == 1 else "s", s.start_fire])
-	return "      ".join(parts)
-
-
-func _make_card(slot: int) -> Dictionary:
-	var style := UI.panel_style(UI.PANEL, 18, 4, UI.PANEL)
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(270, 340)
-	panel.add_theme_stylebox_override("panel", style)
-
-	var box := VBoxContainer.new()
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 10)
-	panel.add_child(box)
-
-	box.add_child(UI.label("PLAYER %d" % (slot + 1), 28))
-	box.add_child(UI.label("starts %s" % CORNERS[slot], 16, UI.DIM, 4))
-
-	var swatch_style := UI.panel_style(Color.DIM_GRAY, 48, 4, Color.BLACK)
-	var swatch := Panel.new()
-	swatch.custom_minimum_size = Vector2(96, 96)
-	swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	swatch.add_theme_stylebox_override("panel", swatch_style)
-	box.add_child(swatch)
-
-	var color_label := UI.label("", 28)
-	box.add_child(color_label)
-	var device_label := UI.label("", 15, UI.DIM, 4)
-	device_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	device_label.custom_minimum_size.x = 230
-	box.add_child(device_label)
-	var status := UI.label("", 22)
-	box.add_child(status)
-
-	return {"panel": panel, "style": style, "swatch": swatch, "swatch_style": swatch_style,
-		"color": color_label, "device": device_label, "status": status}
+	# Right third: settings.
+	_settings_section = SettingsSection.new()
+	_settings_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_settings_section.size_flags_stretch_ratio = 1.0
+	split.add_child(_settings_section)
+	_settings_section.setup(GameState.settings)
 
 
 func _refresh() -> void:
-	_summary.text = _settings_summary()
-	for slot in _cards.size():
-		var card: Dictionary = _cards[slot]
-		if _lobby.is_joined(slot):
-			var color := GameState.color_of(slot)
-			var is_ready := _lobby.ready[slot]
-			card.swatch_style.bg_color = color
-			card.swatch.modulate = Color.WHITE
-			card.color.text = GameState.color_name(slot).to_upper() if is_ready else "<  %s  >" % GameState.color_name(slot).to_upper()
-			card.device.text = InputRouter.device_label(InputRouter.device_in_slot(slot))
-			card.status.text = "READY!" if is_ready else "Cross / Space / Enter: ready"
-			card.status.add_theme_color_override("font_color", UI.GOOD if is_ready else Color.WHITE)
-			card.status.add_theme_font_size_override("font_size", 30 if is_ready else 18)
-			card.style.border_color = color if is_ready else UI.PANEL.lightened(0.2)
-			card.panel.modulate = Color.WHITE
-		else:
-			card.swatch_style.bg_color = Color.DIM_GRAY
-			card.swatch.modulate = Color(1, 1, 1, 0.25)
-			card.color.text = ""
-			card.device.text = ""
-			card.status.text = JOIN_TEXT
-			card.status.add_theme_color_override("font_color", UI.DIM)
-			card.status.add_theme_font_size_override("font_size", 18)
-			card.style.border_color = UI.PANEL
-			card.panel.modulate = Color(1, 1, 1, 0.75)
+	for portrait in LobbyState.PORTRAIT_COUNT:
+		var claimed: Array = []
+		if portrait == LobbyState.RANDOM:
+			claimed = _lobby.random_pickers()
+		elif _lobby.claimed_by(portrait) != LobbyState.NONE:
+			claimed = [_lobby.claimed_by(portrait)]
+		_tiles[portrait].show_state(claimed, _lobby.cursors_on(LobbyState.Area.PORTRAITS, portrait))
 
-	if _lobby.joined_count() == 0:
-		_prompt.text = "Join in!   (Back: main menu)"
-	elif not _lobby.all_ready():
-		_prompt.text = "Waiting for everyone to be ready..."
+	var spare_pad := not InputRouter.spare_pads().is_empty()
+	for slot in LobbyState.SLOT_COUNT:
+		var kind := _lobby.kinds[slot]
+		var device := ""
+		var hint := ""
+		match kind:
+			LobbyState.Kind.PLAYER:
+				device = InputRouter.device_label(InputRouter.device_in_slot(slot))
+			LobbyState.Kind.AI:
+				device = "Computer (no AI yet: stands still)"
+				hint = "Cross: turn off"
+			LobbyState.Kind.OFF:
+				hint = "Cross: add player" if spare_pad else "Cross: add AI"
+		_cards[slot].show_state({
+			"kind": kind,
+			"pick": _lobby.picks[slot],
+			"device": device,
+			"cursors": _lobby.cursors_on(LobbyState.Area.SLOTS, slot),
+			"hint": hint,
+		})
+	_refresh_prompt()
+
+
+func _refresh_prompt() -> void:
+	var color := UI.ACCENT
+	if _flash_left > 0.0:
+		_prompt.text = _flash_text
+		color = WARN
+	elif _lobby.humans().is_empty():
+		_prompt.text = "Press Cross / Space / Enter to join     (Back: main menu)"
+	elif not _lobby.can_start():
+		_prompt.text = _waiting_text()
 	elif _lobby.is_practice():
 		_prompt.text = "Press START for practice"
 	else:
 		_prompt.text = "Press START to fight!"
+	_prompt.add_theme_color_override("font_color", color)

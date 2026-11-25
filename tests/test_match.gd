@@ -142,8 +142,8 @@ func test_finished_match_records_results() -> void:
 
 
 func test_lobby_colours_reach_the_players() -> void:
-	GameState.lobby.join(0)
-	GameState.lobby.cycle_color(0, 1)  # white -> black
+	GameState.lobby.add_player(0)
+	GameState.lobby.claim_portrait(0, 1)  # black
 	var m := _playing([0])
 	check_eq(m.players[0].color, Palette.PLAYER_COLORS[1], "player uses the lobby colour")
 	check_eq(m._player_name(0), "BLACK", "announced by colour name")
@@ -495,4 +495,52 @@ func test_swapping_remote_releases_waiting_bombs() -> void:
 	check(not p.stats.has_remote(), "remote gone")
 	_run(m, Rules.BOMB_FUSE_TICKS + 1)
 	check(not m.bombs.has_bomb(Vector2i(1, 3)), "the waiting bomb got a fuse and went off")
+	m.free()
+
+
+func test_any_two_players_start_in_the_first_two_corners() -> void:
+	var m := _playing([2, 5])
+	check_eq(m.players[2].get_cell(), Vector2i(1, 1), "first player top-left")
+	check_eq(m.players[5].get_cell(), Vector2i(13, 1), "second player top-right")
+	check_eq(m.grid.get_cell(Vector2i(7, 1)), Grid.Cell.SOFT, "unused middle spawns stay bricks")
+	m.free()
+
+
+func test_versus_line_up_with_ai_and_six_players() -> void:
+	# Versus screen: P1 human, P2..P6 AI. Everyone gets an open spawn of their own and a colour of
+	# their own; AI players have no logic yet and stand still.
+	GameState.settings = MatchSettings.new()
+	InputRouter.release_all()
+	InputRouter.assign_to("kb0", 0)
+	var lobby := GameState.lobby
+	lobby.reset()
+	lobby.add_player(0)
+	lobby.claim_portrait(0, 2)
+	for slot in range(1, 6):
+		lobby.add_ai(slot)
+	lobby.resolve_picks(RandomNumberGenerator.new())
+	GameState.in_session = true
+	var m: Node3D = MATCH_SCENE.instantiate()
+	m.leave_on_finish = false
+	m.rng_seed = 1
+	(Engine.get_main_loop() as SceneTree).root.add_child(m)
+	_run(m, INTRO)
+	check_eq(m.rules.participants, [0, 1, 2, 3, 4, 5] as Array[int], "everyone plays")
+	var cells := {}
+	var colors := {}
+	for slot in 6:
+		var p: Node3D = m.players[slot]
+		cells[p.get_cell()] = true
+		colors[p.color] = true
+		check_eq(m.grid.get_cell(p.get_cell()), Grid.Cell.EMPTY, "P%d spawn is open" % (slot + 1))
+	check_eq(cells.size(), 6, "six different spawns")
+	check_eq(colors.size(), 6, "six different colours")
+	check_eq(m.players[0].color, Palette.PLAYER_COLORS[2], "the human keeps the claimed colour")
+	check_eq(m.players[1].device, InputRouter.AI_DEVICE, "AI slot")
+	var before: Vector2 = m.players[1].grid_pos
+	_run(m, 60)
+	check_eq(m.players[1].grid_pos, before, "AI stands still")
+	GameState.in_session = false
+	lobby.reset()
+	InputRouter.release_all()
 	m.free()

@@ -1,11 +1,11 @@
 # Bomberman Next Generation
 
-A local-multiplayer versus game in the style of **Bomberman Generations** (GameCube), built with Godot 4.7.1 and GDScript. Up to 4 players on keyboards or PlayStation controllers, played in the browser.
+A local-multiplayer versus game in the style of **Bomberman Generations** (GameCube), built with Godot 4.7.1 and GDScript. Up to 6 players on keyboards or PlayStation controllers (AI slots too, though AI players only stand still for now), played in the browser.
 
 > Fan project. Not affiliated with or endorsed by Konami or Hudson Soft; Bomberman is a trademark of Konami Digital Entertainment. This repository contains code only, no original game assets.
 
 ## Status
-**Phase 1** (local multiplayer, base mechanics) is playable: main menu, 4-player lobby, Bomberman-style movement, bombs and chain reactions, rounds with a clock and sudden death, results and rematch. Remaining for Phase 1: a full 4-controller browser playtest.
+**Phase 1** (local multiplayer, base mechanics) is playable: main menu, a versus screen for up to 6 players (portraits, slots, AI slots, settings), Bomberman-style movement, bombs and chain reactions, rounds with a clock and sudden death, results and rematch. Remaining for Phase 1: a full 4-controller browser playtest.
 **Phase 2** (match settings and items) is complete: a lobby settings panel and the full Bomberman Generation battle item set, from Bomb Up to the Skull and its 10 curses. Many timings and item rates are still best guesses until checked against the original; see *Tuning* below.
 
 ## Play it locally
@@ -22,16 +22,23 @@ Then open **http://localhost:8060/** in Chrome or Firefox. Use `localhost`, not 
 
 You can also open this folder in the Godot editor and press F5.
 
-**Flow:** main menu → VERSUS → lobby (join on your own device, pick a colour with left/right, ready up; any player can open the match settings) → START → match (first to 3 round wins; Start pauses) → results (rematch / lobby / main menu). A single ready player gets a practice match.
+**Flow:** main menu → VERSUS → versus screen → START → match (first to 3 round wins; Start pauses) → results (rematch / lobby / main menu).
+
+**Versus screen:** the left two thirds hold the portraits (7 on top, 8 below; the far right one is Random, colours beyond the 8 playable ones are locked for now) and six player slots under them; the right third lists every match setting.
+- Press Cross / Space / Enter on a new controller to join: it takes the next free slot and gets a cursor (P1-P6).
+- Move the cursor with the d-pad or left stick (hold to repeat) and press Cross on a portrait to claim it. Each portrait can be claimed once; Random can be picked by anyone and is settled on a free colour when the match starts. Back drops your portrait, Back again leaves.
+- Move down to the slot cards and press Cross on an empty slot to toggle it Off → Player (when a spare pad is connected) → AI → Off. AI players pick Random.
+- Move right past the end of any row (or press Triangle) to enter the settings; only one player at a time. Up/down choose, right or Cross changes a row (left/right step it, Cross or Back finishes), left or Back leaves.
+- START begins once every player has a portrait. One participant alone gets a practice match.
 
 ## Controls
 | | Keyboard 1 | Keyboard 2 | PlayStation pad |
 |---|---|---|---|
 | Move / menus | WASD | Arrow keys | D-pad or left stick |
-| Bomb · join · ready · select | Space | Enter | Cross |
-| Back · un-ready · leave | Esc | Backspace | Circle |
+| Bomb · join · claim · select | Space | Enter | Cross |
+| Back · drop portrait · leave | Esc | Backspace | Circle |
 | Start · pause | Tab | P | Options |
-| Match settings (lobby) | Q | Delete | Triangle |
+| Settings shortcut (versus screen) | Q | Delete | Triangle |
 | Special (punch, remote detonate) | E | Shift | Circle |
 
 ## Rules (Phase 1)
@@ -90,7 +97,7 @@ Game rules live in plain classes under `scripts/core/` that tick at 60 Hz with n
 Prints `N passed, M failed` and exits with the number of failures.
 
 ## Levels
-Stages are ASCII in `levels/*.tres`: `#` hard block, `+` brick, `?` random brick, `.` floor, `1`-`4` spawns. See [`scripts/levels/level_data.gd`](scripts/levels/level_data.gd).
+Stages are ASCII in `levels/*.tres`: `#` hard block, `+` brick, `?` random brick, `.` floor, `1`-`4` spawns, `5`-`6` optional spawns for a 5th and 6th player (a brick when fewer play). Players take spawns in order, so any four start in the corners. See [`scripts/levels/level_data.gd`](scripts/levels/level_data.gd).
 
 ## Art and sound
 Not in this repository. The game draws generated placeholders when `assets_ext/` is missing, so a fresh clone runs. To use a local asset folder, link it in (the folder is git-ignored):
