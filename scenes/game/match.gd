@@ -2,7 +2,9 @@ extends Node3D
 ## Versus match root. Owns the arena, players, bombs and the round flow (MatchRules), and turns
 ## rule signals into scene changes: fresh arena per round, input locks, falling blocks, HUD.
 ##
-## Per physics tick: InputRouter (autoload) -> Match (bombs, deaths, then rules) -> Players (movement).
+## Per physics tick: InputRouter (autoload) -> Match (bombs, deaths, rules, then AI decisions)
+## -> Players (movement). AI players drive virtual controllers, so their choices reach their
+## players through InputRouter one tick later, like a human's button presses.
 
 const PLAYER_SCENE := preload("res://scenes/game/player.tscn")
 const BombView := preload("res://scenes/game/bomb_view.gd")
@@ -26,6 +28,7 @@ var bombs: BombField
 var items: ItemField
 var rules := MatchRules.new()
 var players: Array = []  # Player node or null, indexed by slot
+var ais := {}            # slot -> BomberAI, for computer players
 
 var _rng := RandomNumberGenerator.new()
 var _bomb_views := {}  # bomb id -> BombView
@@ -62,8 +65,10 @@ func _ready() -> void:
 	if GameState.in_session:
 		# The versus screen's line-up: humans on their controllers, AI slots as idle players.
 		for slot in GameState.lobby.participants():
-			var device := InputRouter.device_in_slot(slot) if GameState.lobby.is_human(slot) else InputRouter.AI_DEVICE
-			_spawn_player(slot, device)
+			if GameState.lobby.is_human(slot):
+				_spawn_player(slot, InputRouter.device_in_slot(slot))
+			else:
+				add_ai_player(slot)
 	else:
 		for slot in InputRouter.MAX_SLOTS:
 			var device := InputRouter.device_in_slot(slot)
@@ -81,6 +86,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if InputRouter.action_pressed.is_connected(_on_action_pressed):
 		InputRouter.action_pressed.disconnect(_on_action_pressed)
+	for slot: int in ais:
+		InputRouter.remove_virtual_device(InputRouter.ai_device(slot))
 
 
 func _physics_process(_delta: float) -> void:
@@ -98,6 +105,7 @@ func _physics_process(_delta: float) -> void:
 		if GameState.settings.curse_spread:
 			_spread_curses()
 	rules.tick()
+	_tick_ais()
 
 
 func _process(_delta: float) -> void:
@@ -285,6 +293,8 @@ func _start_round() -> void:
 		players[slot].respawn(_spawn_cell(slot))
 		players[slot].reset_stats(GameState.settings)
 		hud.set_alive(slot, true)
+	for ai: BomberAI in ais.values():
+		ai.reset()
 	_set_input(false)
 	hud.set_wins(rules.wins)
 	rules.start_round(grid)
@@ -516,6 +526,44 @@ func _on_action_pressed(device: String, action: StringName) -> void:
 			_update_hint()
 	elif action == &"start" and slot != -1:
 		_begin_match()
+
+
+## A computer player in `slot`: a virtual controller driven by a BomberAI. `level` -1 = the
+## match setting.
+func add_ai_player(slot: int, level := -1) -> void:
+	if level == -1:
+		level = GameState.settings.ai_level
+	var device := InputRouter.ai_device(slot)
+	InputRouter.add_virtual_device(device)
+	var seed_value := (rng_seed * 31 + slot + 1) if rng_seed != 0 else 0
+	ais[slot] = BomberAI.new(slot, level, seed_value)
+	_spawn_player(slot, device)
+
+
+## Each AI looks at the field and sets what its controller holds next tick. Outside play (intro,
+## round over) and once dead, it lets go of everything.
+func _tick_ais() -> void:
+	for slot: int in ais:
+		var player: Node3D = players[slot]
+		var device := InputRouter.ai_device(slot)
+		if player == null or not player.alive or not player.input_enabled or not rules.is_playing():
+			InputRouter.set_virtual_actions(device, {})
+			continue
+		InputRouter.set_virtual_actions(device, ais[slot].tick(_ai_view(player)))
+
+
+func _ai_view(player: Node3D) -> BomberAI.View:
+	var view := BomberAI.View.new()
+	view.grid = grid
+	view.bombs = bombs
+	view.items = items
+	view.pos = player.grid_pos
+	view.stats = player.stats
+	for other in players:
+		if other and other != player and other.alive:
+			view.others.append(other.grid_pos)
+	view.doomed = rules.doomed_cells()
+	return view
 
 
 func _spawn_player(slot: int, device: String) -> void:

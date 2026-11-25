@@ -42,6 +42,8 @@ signal bomb_exploded(id: int, cell: Vector2i, owner: int, flames: Array)
 signal bomb_removed(id: int, cell: Vector2i)
 ## A bomb changed kind (became a Dangerous Bomb).
 signal bomb_changed(id: int)
+## A still bomb in `cell` started sliding in `dir` (kicked; not emitted for bouncy kicks).
+signal bomb_kicked(id: int, cell: Vector2i, dir: Vector2i)
 signal block_burning(cell: Vector2i)
 ## A soft block finished burning and is gone. Phase 2: power-ups can appear here.
 signal block_destroyed(cell: Vector2i)
@@ -155,6 +157,31 @@ func bomb_count(owner: int) -> int:
 	return count
 
 
+## Every bomb as plain data, for the AI: {"cell", "owner", "fire_range", "fuse", "remote", "pierce",
+## "dangerous", "mine", "armed", "flying"}. A flying bomb reports its landing cell and goes off
+## no sooner than it lands. Carried bombs are left out (nobody knows where they will land).
+func bomb_list() -> Array[Dictionary]:
+	var list: Array[Dictionary] = []
+	for bomb: Bomb in _bombs.values():
+		list.append(_bomb_info(bomb, bomb.fuse))
+	for bomb: Bomb in _mines.values():
+		list.append(_bomb_info(bomb, bomb.fuse))
+	for bomb in _flying:
+		list.append(_bomb_info(bomb, maxi(bomb.fuse, bomb.fly_ticks + 1)))
+	return list
+
+
+## Active flames: cell -> ticks left. Read only.
+func flame_cells() -> Dictionary:
+	return _flames
+
+
+func _bomb_info(bomb: Bomb, fuse: int) -> Dictionary:
+	return {"cell": bomb.cell, "owner": bomb.owner, "fire_range": bomb.fire_range, "fuse": fuse,
+		"remote": bomb.remote, "pierce": bomb.pierce, "dangerous": bomb.dangerous,
+		"mine": bomb.mine, "armed": bomb.armed, "flying": bomb.flying}
+
+
 ## Every bomb's position in cells: Vector3(x, height, y) keyed by bomb id.
 func bomb_positions() -> Dictionary:
 	var positions := {}
@@ -232,6 +259,7 @@ func kick(cell: Vector2i, dir: Vector2i, bouncy := false) -> bool:
 		return false
 	bomb.slide_dir = dir
 	bomb.offset = 0.0
+	bomb_kicked.emit(bomb.id, cell, dir)
 	return true
 
 

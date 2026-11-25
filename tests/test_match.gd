@@ -508,7 +508,7 @@ func test_any_two_players_start_in_the_first_two_corners() -> void:
 
 func test_versus_line_up_with_ai_and_six_players() -> void:
 	# Versus screen: P1 human, P2..P6 AI. Everyone gets an open spawn of their own and a colour of
-	# their own; AI players have no logic yet and stand still.
+	# their own.
 	GameState.settings = MatchSettings.new()
 	InputRouter.release_all()
 	InputRouter.assign_to("kb0", 0)
@@ -536,11 +536,43 @@ func test_versus_line_up_with_ai_and_six_players() -> void:
 	check_eq(cells.size(), 6, "six different spawns")
 	check_eq(colors.size(), 6, "six different colours")
 	check_eq(m.players[0].color, Palette.PLAYER_COLORS[2], "the human keeps the claimed colour")
-	check_eq(m.players[1].device, InputRouter.AI_DEVICE, "AI slot")
-	var before: Vector2 = m.players[1].grid_pos
-	_run(m, 60)
-	check_eq(m.players[1].grid_pos, before, "AI stands still")
+	check_eq(m.players[1].device, InputRouter.ai_device(1), "AI slot on its own virtual controller")
+	check(m.ais.has(1) and m.ais.has(5) and not m.ais.has(0), "a brain per AI slot")
 	GameState.in_session = false
 	lobby.reset()
 	InputRouter.release_all()
 	m.free()
+
+
+func test_ai_players_play_a_round() -> void:
+	# Two Normal AIs in the real match scene, through their virtual controllers (InputRouter has
+	# to tick here: that is how their buttons reach their players).
+	GameState.settings = MatchSettings.new()
+	var m: Node3D = MATCH_SCENE.instantiate()
+	m.allow_drop_in = false
+	m.leave_on_finish = false
+	m.rng_seed = 3
+	(Engine.get_main_loop() as SceneTree).root.add_child(m)
+	m.add_ai_player(0, BomberAI.Level.NORMAL)
+	m.add_ai_player(1, BomberAI.Level.NORMAL)
+	m._begin_match()
+	var bricks_before: int = m.grid.cells_of(Grid.Cell.SOFT).size()
+	var bombs_placed := [0]
+	m.bombs.bomb_placed.connect(func(_id, _cell, _owner): bombs_placed[0] += 1)
+	var walked := 0.0
+	var last: Vector2 = m.players[0].grid_pos
+	for i in INTRO + 20 * Rules.TICKS_PER_SECOND:
+		InputRouter._physics_process(TICK)
+		m._physics_process(TICK)
+		for player in m.players:
+			if player:
+				player._physics_process(TICK)
+		walked += m.players[0].grid_pos.distance_to(last)
+		last = m.players[0].grid_pos
+		if m.rules.state != MatchRules.State.PLAYING and i > INTRO:
+			break  # someone won the round
+	check(walked > 5.0, "the AI walked around (%.1f cells)" % walked)
+	check(bombs_placed[0] >= 2, "dropped bombs (%d)" % bombs_placed[0])
+	check(m.grid.cells_of(Grid.Cell.SOFT).size() < bricks_before, "broke bricks")
+	m.free()
+	check(not InputRouter.is_virtual(InputRouter.ai_device(0)), "virtual controllers removed with the match")

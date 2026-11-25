@@ -161,6 +161,26 @@ func _tick_sudden_death() -> void:
 			return
 
 
+## Sudden death, for the AI: cells where a block is falling and the next `lookahead` cells of the
+## spiral, each with the ticks until its block lands. Empty before sudden death.
+func doomed_cells(lookahead := 6) -> Dictionary:
+	var doomed := {}
+	if not sudden_death or _grid == null:
+		return doomed
+	for cell: Vector2i in _falling:
+		doomed[cell] = _falling[cell]
+	var lands_in := maxi(_next_drop, 0) + Rules.FALL_TICKS
+	var index := _spiral_index
+	while index < _spiral.size() and lookahead > 0:
+		var cell := _spiral[index]
+		index += 1
+		if _grid.get_cell(cell) != Grid.Cell.HARD and not doomed.has(cell):
+			doomed[cell] = lands_in
+			lands_in += Rules.DROP_INTERVAL_TICKS
+			lookahead -= 1
+	return doomed
+
+
 func _finish_round(winner: int) -> void:
 	round_winner = winner
 	if winner != -1:

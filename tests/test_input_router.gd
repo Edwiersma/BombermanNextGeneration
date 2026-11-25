@@ -72,3 +72,25 @@ func test_godot_ui_actions_are_cleared() -> void:
 	_router()
 	for action in [&"ui_accept", &"ui_up", &"ui_down"]:
 		check(InputMap.action_get_events(action).is_empty(), "%s has no events" % action)
+
+
+func test_virtual_controllers_report_like_real_ones() -> void:
+	var router := _router()
+	var device := InputRouter.ai_device(2)
+	check_eq(device, "ai3", "AI device id per slot")
+	router.add_virtual_device(device)
+	check(router.is_virtual(device) and not router.is_connected_device(device), "virtual, not a pad")
+	var pressed: Array = []
+	var on_press := func(d, action): if d == device: pressed.append(action)
+	router.action_pressed.connect(on_press)
+	router.set_virtual_actions(device, {&"left": true, &"bomb": true})
+	check(not router.is_held(device, &"left"), "takes effect on the next tick")
+	router._physics_process(1.0 / 60.0)
+	check(router.is_held(device, &"left") and router.is_held(device, &"bomb"), "held")
+	check_eq(pressed, [&"left", &"bomb"], "pressed events")
+	router.set_virtual_actions(device, {&"left": true})
+	router._physics_process(1.0 / 60.0)
+	check(not router.is_held(device, &"bomb"), "released")
+	router.action_pressed.disconnect(on_press)
+	router.remove_virtual_device(device)
+	check(not router.is_virtual(device) and not router.is_held(device, &"left"), "gone")

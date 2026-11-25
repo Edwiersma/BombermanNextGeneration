@@ -33,9 +33,9 @@ func focus_first() -> void:
 			return
 
 
-func _on_action(_device: String, action: StringName) -> void:
-	if not active or not is_inside_tree():
-		return
+func _on_action(device: String, action: StringName) -> void:
+	if not active or not is_inside_tree() or InputRouter.is_virtual(device):
+		return  # AI controllers never drive menus (e.g. the pause menu)
 	match action:
 		&"up":
 			_move(-1)

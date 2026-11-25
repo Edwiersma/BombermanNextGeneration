@@ -5,6 +5,7 @@ extends Node
 ##   "kb0"  keyboard, WASD + Space
 ##   "kb1"  keyboard, arrow keys + Enter
 ##   "padN" Godot joypad index N (PlayStation pads via the browser Gamepad API)
+##   "aiN"  virtual controller of the AI player in slot N (1-6): code sets what it holds
 ##
 ## Menus and gameplay read input only through this node, never from raw devices.
 ## That keeps the door open for AI or network players later.
@@ -15,9 +16,6 @@ signal devices_changed
 signal slots_changed
 
 const MAX_SLOTS := 6
-## Device id for AI players: never connected, never pressed, so its player just stands still
-## until AI logic exists.
-const AI_DEVICE := "ai"
 const STICK_DEADZONE := 0.5
 
 const ACTIONS := [&"up", &"down", &"left", &"right", &"bomb", &"special", &"back", &"start", &"menu"]
@@ -66,6 +64,9 @@ const SONY_PRODUCTS := {
 var slots: Array[String] = []
 
 var _devices: Array[String] = []
+## Virtual controllers (AI players): device id -> {action: bool} set by code, reported like a
+## real controller's state on the next tick.
+var _virtual := {}
 var _held := {}  # device id -> {action: bool}
 ## Presses seen as events since the last tick. Polling alone misses a tap that is
 ## pressed and released between two ticks; a latched press counts as held for one tick.
@@ -92,19 +93,25 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	# Autoloads run before scene nodes, so state is fresh for gameplay each tick.
 	for device in _devices:
-		var before: Dictionary = _held.get(device, {})
-		var now := _read_device(device)
-		for action in _latched.get(device, {}):
-			now[action] = true
-		_held[device] = now
-		for action in ACTIONS:
-			var was_held: bool = before.get(action, false)
-			var held_now: bool = now[action]
-			if held_now and not was_held:
-				action_pressed.emit(device, action)
-			elif was_held and not held_now:
-				action_released.emit(device, action)
+		_update_device(device)
+	for device: String in _virtual.keys():
+		_update_device(device)
 	_latched.clear()
+
+
+func _update_device(device: String) -> void:
+	var before: Dictionary = _held.get(device, {})
+	var now := _read_device(device)
+	for action in _latched.get(device, {}):
+		now[action] = true
+	_held[device] = now
+	for action in ACTIONS:
+		var was_held: bool = before.get(action, false)
+		var held_now: bool = now[action]
+		if held_now and not was_held:
+			action_pressed.emit(device, action)
+		elif was_held and not held_now:
+			action_released.emit(device, action)
 
 
 func _input(event: InputEvent) -> void:
@@ -182,6 +189,32 @@ func get_direction(device: String) -> Vector2i:
 	if is_held(device, &"down"):
 		dir.y += 1
 	return dir
+
+
+# --- Virtual controllers (AI) --------------------------------------------------
+
+## Device id of the AI player in `slot`.
+static func ai_device(slot: int) -> String:
+	return "ai%d" % (slot + 1)
+
+
+func add_virtual_device(device: String) -> void:
+	_virtual[device] = {}
+
+
+func remove_virtual_device(device: String) -> void:
+	_virtual.erase(device)
+	_held.erase(device)
+
+
+func is_virtual(device: String) -> bool:
+	return _virtual.has(device)
+
+
+## What the virtual controller holds from the next tick on: {action: true}. Missing = released.
+func set_virtual_actions(device: String, held: Dictionary) -> void:
+	if _virtual.has(device):
+		_virtual[device] = held
 
 
 # --- Slots -------------------------------------------------------------------
@@ -268,7 +301,11 @@ func _on_joy_connection_changed(_device: int, _connected: bool) -> void:
 
 func _read_device(device: String) -> Dictionary:
 	var state := {}
-	if is_pad(device):
+	if _virtual.has(device):
+		var held: Dictionary = _virtual[device]
+		for action in ACTIONS:
+			state[action] = held.get(action, false)
+	elif is_pad(device):
 		var id := pad_index(device)
 		for action in ACTIONS:
 			var pressed := false

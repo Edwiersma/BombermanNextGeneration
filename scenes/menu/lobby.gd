@@ -300,7 +300,7 @@ func _refresh() -> void:
 			LobbyState.Kind.PLAYER:
 				device = InputRouter.device_label(InputRouter.device_in_slot(slot))
 			LobbyState.Kind.AI:
-				device = "Computer (no AI yet: stands still)"
+				device = "Computer, %s" % GameState.settings.value_text("ai_level")
 				hint = "Cross: turn off"
 			LobbyState.Kind.OFF:
 				hint = "Cross: add player" if spare_pad else "Cross: add AI"
