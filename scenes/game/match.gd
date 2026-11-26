@@ -68,7 +68,7 @@ func _ready() -> void:
 			if GameState.lobby.is_human(slot):
 				_spawn_player(slot, InputRouter.device_in_slot(slot))
 			else:
-				add_ai_player(slot)
+				add_ai_player(slot, GameState.lobby.ai_levels[slot])
 	else:
 		for slot in InputRouter.MAX_SLOTS:
 			var device := InputRouter.device_in_slot(slot)
@@ -528,11 +528,8 @@ func _on_action_pressed(device: String, action: StringName) -> void:
 		_begin_match()
 
 
-## A computer player in `slot`: a virtual controller driven by a BomberAI. `level` -1 = the
-## match setting.
-func add_ai_player(slot: int, level := -1) -> void:
-	if level == -1:
-		level = GameState.settings.ai_level
+## A computer player in `slot`: a virtual controller driven by a BomberAI.
+func add_ai_player(slot: int, level: int = BomberAI.Level.NORMAL) -> void:
 	var device := InputRouter.ai_device(slot)
 	InputRouter.add_virtual_device(device)
 	var seed_value := (rng_seed * 31 + slot + 1) if rng_seed != 0 else 0
@@ -558,6 +555,8 @@ func _ai_view(player: Node3D) -> BomberAI.View:
 	view.bombs = bombs
 	view.items = items
 	view.pos = player.grid_pos
+	view.facing = player.facing
+	view.carrying = player.is_carrying()
 	view.stats = player.stats
 	for other in players:
 		if other and other != player and other.alive:

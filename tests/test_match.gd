@@ -517,7 +517,7 @@ func test_versus_line_up_with_ai_and_six_players() -> void:
 	lobby.add_player(0)
 	lobby.claim_portrait(0, 2)
 	for slot in range(1, 6):
-		lobby.add_ai(slot)
+		lobby.add_ai(slot, slot % 3)
 	lobby.resolve_picks(RandomNumberGenerator.new())
 	GameState.in_session = true
 	var m: Node3D = MATCH_SCENE.instantiate()
@@ -538,6 +538,7 @@ func test_versus_line_up_with_ai_and_six_players() -> void:
 	check_eq(m.players[0].color, Palette.PLAYER_COLORS[2], "the human keeps the claimed colour")
 	check_eq(m.players[1].device, InputRouter.ai_device(1), "AI slot on its own virtual controller")
 	check(m.ais.has(1) and m.ais.has(5) and not m.ais.has(0), "a brain per AI slot")
+	check_eq([m.ais[1].level, m.ais[2].level, m.ais[3].level], [1, 2, 0], "each at its slot's level")
 	GameState.in_session = false
 	lobby.reset()
 	InputRouter.release_all()

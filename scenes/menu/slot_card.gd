@@ -74,7 +74,9 @@ func _draw() -> void:
 	var hint: String = _state.get("hint", "")
 	var cursors: Array = _state.get("cursors", [])
 	if hint != "" and not cursors.is_empty():
-		draw_string(font, Vector2(0.0, size.y - 12.0), hint, HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, UI.ACCENT)
+		var lines := hint.count("\n") + 1
+		draw_multiline_string(font, Vector2(4.0, size.y - 8.0 - 14.0 * (lines - 1)), hint, HORIZONTAL_ALIGNMENT_CENTER,
+			size.x - 8.0, 12, lines, UI.ACCENT)
 	elif active and pick != LobbyState.NONE:
 		draw_string(font, Vector2(0.0, size.y - 11.0), "READY", HORIZONTAL_ALIGNMENT_CENTER, size.x, 18, UI.GOOD)
-	Draw.cursors(self, font, rect, cursors, Vector2(6.0, 32.0))
+	Draw.cursors(self, font, rect, cursors, Vector2(6.0, 32.0), _state.get("carried", {}))

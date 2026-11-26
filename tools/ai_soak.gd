@@ -42,7 +42,7 @@ func _run() -> void:
 		m.add_ai_player(slot, level)
 	m._begin_match()
 
-	var deaths := {"own bomb": 0, "other's bomb": 0, "crushed": 0}
+	var deaths := {"own bomb": 0, "own bomb set off early": 0, "other's bomb": 0, "crushed": 0}
 	var wins := 0
 	var draws := 0
 	var round_seconds: Array[float] = []
@@ -93,7 +93,9 @@ func _run() -> void:
 				if not m.bombs.has_flame(cell):
 					deaths["crushed"] += 1
 				elif flame_owner.get(cell, -1) == slot:
-					deaths["own bomb"] += 1
+					# Set off early (chain or kick from someone else): mostly being trapped, not a blunder.
+					var early := booms.any(func(b): return b[0] == slot and b[2] < Rules.BOMB_FUSE_TICKS - 10)
+					deaths["own bomb set off early" if early else "own bomb"] += 1
 					if verbose:
 						var plans := "\n    ".join(m.ais[slot].notes)
 						var went_off := booms.map(func(b): return "P%d bomb at %s (placed at %s%s), %d ticks old" % [b[0] + 1, b[1], b[3], ", kicked by P%d" % (b[4] + 1) if b[4] != -1 else "", b[2]])
@@ -122,7 +124,7 @@ func _run() -> void:
 	for s in round_seconds:
 		total += s
 	print("AI soak: %d players, level %s, %d rounds (%.1f s real time)" % [
-		count, MatchSettings.AI_LEVEL_NAMES[level], rounds, (Time.get_ticks_msec() - started) / 1000.0])
+		count, BomberAI.LEVEL_NAMES[level], rounds, (Time.get_ticks_msec() - started) / 1000.0])
 	print("  rounds won %d, draws %d, average round %.1f s (shortest %.1f, longest %.1f)" % [
 		wins, draws, total / maxf(rounds, 1), round_seconds.min() if rounds else 0.0, round_seconds.max() if rounds else 0.0])
 	print("  deaths: %s" % deaths)

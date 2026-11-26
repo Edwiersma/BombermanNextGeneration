@@ -17,8 +17,7 @@ const ITEM_ROW_PREFIX := "item:"
 
 ## Plain settings, in panel order. Item on/off rows follow them.
 const SCALAR_ROWS := ["wins_to_win", "round_seconds", "sudden_death", "start_bombs", "start_fire",
-	"item_frequency", "death_items", "curse_spread", "ai_level"]
-const AI_LEVEL_NAMES := ["Easy", "Normal", "Hard"]
+	"item_frequency", "death_items", "curse_spread"]
 
 ## What happens to the items a player collected when they die.
 enum DeathItems { SCATTER, LOST }
@@ -32,8 +31,6 @@ var item_frequency := 2  # index into FREQUENCY_NAMES / Rules.ITEM_SHARE
 var death_items: int = DeathItems.SCATTER
 ## Curses pass to a player you touch.
 var curse_spread := true
-## Computer players' difficulty (BomberAI.Level).
-var ai_level := 1
 ## Item key -> enabled. Missing keys count as enabled, so new items are on by default.
 var item_enabled := {}
 
@@ -89,7 +86,6 @@ func row_label(key: String) -> String:
 		"item_frequency": return "Items"
 		"death_items": return "Items of fallen players"
 		"curse_spread": return "Curses spread on touch"
-		"ai_level": return "AI level"
 	return key
 
 
@@ -107,8 +103,6 @@ func value_text(key: String) -> String:
 			return "Scatter" if death_items == DeathItems.SCATTER else "Lost"
 		"curse_spread":
 			return "On" if curse_spread else "Off"
-		"ai_level":
-			return AI_LEVEL_NAMES[ai_level]
 	return str(get(key))
 
 
@@ -136,8 +130,6 @@ func step(key: String, dir: int) -> void:
 			death_items = DeathItems.LOST if death_items == DeathItems.SCATTER else DeathItems.SCATTER
 		"curse_spread":
 			curse_spread = not curse_spread
-		"ai_level":
-			ai_level = posmod(ai_level + dir, AI_LEVEL_NAMES.size())
 
 
 func reset_to_defaults() -> void:
@@ -203,7 +195,6 @@ func _sanitize() -> void:
 	item_frequency = clampi(int(item_frequency), 0, FREQUENCY_NAMES.size() - 1)
 	death_items = clampi(int(death_items), 0, DeathItems.size() - 1)
 	curse_spread = bool(curse_spread)
-	ai_level = clampi(int(ai_level), 0, AI_LEVEL_NAMES.size() - 1)
 
 
 func _row_item(key: String) -> int:

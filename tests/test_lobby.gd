@@ -27,11 +27,45 @@ func test_joining_takes_the_first_off_slot_then_replaces_ai() -> void:
 
 func test_slot_toggle_order() -> void:
 	var lobby := _lobby_with_players(1)
-	check_eq(lobby.next_kind(1, false), S.Kind.AI, "off -> AI")
-	check_eq(lobby.next_kind(1, true), S.Kind.PLAYER, "off -> player when a spare pad is connected")
-	lobby.add_ai(1)
-	check_eq(lobby.next_kind(1, true), S.Kind.OFF, "AI -> off")
-	check_eq(lobby.next_kind(0, true), S.Kind.PLAYER, "a human's slot does not toggle")
+	check_eq(lobby.toggle_slot(1, true), S.Kind.PLAYER, "off -> player when a spare pad is connected")
+	check_eq(lobby.kinds[1], S.Kind.OFF, "...which the caller seats")
+	check_eq(lobby.toggle_slot(1, false), S.Kind.AI, "off -> AI")
+	check_eq(lobby.ai_levels[1], BomberAI.Level.EASY, "starting Easy")
+	lobby.toggle_slot(1, true)
+	check_eq(lobby.ai_levels[1], BomberAI.Level.NORMAL, "then Normal")
+	lobby.toggle_slot(1, true)
+	check_eq(lobby.ai_levels[1], BomberAI.Level.HARD, "then Hard")
+	check_eq(lobby.toggle_slot(1, true), S.Kind.OFF, "then off")
+	check_eq(lobby.toggle_slot(0, true), S.Kind.PLAYER, "a human's slot does not change")
+	check_eq(lobby.kinds[0], S.Kind.PLAYER, "still the human")
+
+
+func test_fill_with_ai() -> void:
+	var lobby := _lobby_with_players(1)
+	check_eq(lobby.fill_with_ai(), 3, "up to four")
+	check_eq(lobby.participants().size(), 4, "four play")
+	check_eq(lobby.ai_levels[1], BomberAI.Level.NORMAL, "Normal AIs")
+	check_eq(lobby.fill_with_ai(), 2, "again: up to six")
+	check_eq(lobby.fill_with_ai(), 0, "full")
+
+
+func test_pick_a_portrait_for_an_ai() -> void:
+	var lobby := _lobby_with_players(2)
+	lobby.add_ai(3)
+	check(not lobby.pick_up_ai(0, 1), "only AI tokens")
+	check(lobby.pick_up_ai(0, 3), "P1 carries P4's token")
+	lobby.claim_portrait(1, 5)
+	lobby.cursor_index[0] = 5
+	check(not lobby.place_ai(0), "yellow is P2's")
+	check_eq(lobby.carrying[0], 3, "still carrying")
+	lobby.cursor_index[0] = 6
+	check(lobby.place_ai(0), "pink is free")
+	check_eq(lobby.picks[3], 6, "the AI plays pink")
+	check_eq(lobby.carrying[0], S.NONE, "token put down")
+	check_eq(lobby.claimed_by(6), 3, "and holds it like anyone")
+	lobby.pick_up_ai(1, 3)
+	lobby.set_off(3)
+	check_eq(lobby.carrying[1], S.NONE, "a token whose AI is switched off is dropped")
 
 
 func test_ai_picks_random() -> void:

@@ -83,10 +83,32 @@ func test_slot_cards_toggle_off_and_ai() -> void:
 	check_eq(GameState.lobby.kinds[0], S.Kind.PLAYER, "own slot does not toggle")
 	_press(lobby, "kb0", [&"right", &"bomb"])
 	check_eq(GameState.lobby.kinds[1], S.Kind.AI, "slot 2 -> AI")
+	check("Easy" in lobby._cards[1]._state.device, "card shows the level: %s" % lobby._cards[1]._state.device)
 	_press(lobby, "kb1", [&"bomb"])
 	check_eq(InputRouter.slot_of("kb1"), 2, "a new controller skips the AI slot")
+	_press(lobby, "kb0", [&"bomb", &"bomb"])
+	check_eq(GameState.lobby.ai_levels[1], BomberAI.Level.HARD, "Easy -> Normal -> Hard")
 	_press(lobby, "kb0", [&"bomb"])
-	check_eq(GameState.lobby.kinds[1], S.Kind.OFF, "AI -> off")
+	check_eq(GameState.lobby.kinds[1], S.Kind.OFF, "Hard -> off")
+	_cleanup(lobby)
+
+
+func test_triangle_on_cards_fills_and_picks_for_an_ai() -> void:
+	InputRouter.release_all()
+	var lobby := _open_lobby()
+	_press(lobby, "kb0", [&"bomb", &"down", &"down", &"right", &"menu"])  # join, onto empty slot 2, fill
+	check_eq(GameState.lobby.participants().size(), 4, "filled to four")
+	check(not GameState.lobby.cursor_area[0] == S.Area.SETTINGS, "did not jump to the settings")
+	_press(lobby, "kb0", [&"menu"])  # on slot 2, now an AI: pick up its token
+	check_eq(GameState.lobby.carrying[0], 1, "carrying P2's token")
+	check("pick a bomber for P2" in lobby._prompt.text, "prompt: %s" % lobby._prompt.text)
+	_press(lobby, "kb0", [&"up", &"bomb"])  # onto the bottom row (column 2: locked) and try
+	check_eq(GameState.lobby.carrying[0], 1, "a locked portrait does not take it")
+	_press(lobby, "kb0", [&"left", &"left", &"bomb"])  # aqua
+	check_eq(GameState.lobby.picks[1], 7, "P2 plays aqua")
+	check_eq(GameState.lobby.carrying[0], S.NONE, "token placed")
+	_press(lobby, "kb0", [&"bomb"])
+	check_eq(GameState.lobby.picks[0], S.NONE, "P1 cannot take aqua now")
 	_cleanup(lobby)
 
 

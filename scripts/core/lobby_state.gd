@@ -6,7 +6,9 @@ extends RefCounted
 ##
 ## - A slot is OFF, PLAYER (a controller sits in it) or AI. A joining controller takes the first
 ##   OFF slot, or replaces the first AI when there is none. Cross on an empty slot's card toggles
-##   it OFF -> PLAYER (only when a spare controller is connected to sit in it) -> AI -> OFF.
+##   it OFF -> PLAYER (only when a spare controller is connected to sit in it) -> AI Easy ->
+##   Normal -> Hard -> OFF. Triangle on an AI's card picks up its token: Cross on a portrait then
+##   gives the AI that portrait. Triangle on an empty card fills empty slots with AIs.
 ## - Portraits: two rows, 7 on top and 8 below; the far right of the bottom row is Random. The
 ##   first Palette.PLAYER_COLORS.size() portraits are the playable colours, the rest are locked.
 ##   A portrait can be claimed by one slot only; Random by any number. AI slots pick Random.
@@ -35,6 +37,10 @@ var cursor_area: Array[int] = []
 var cursor_index: Array[int] = []
 ## Slot whose cursor is in the settings section, or NONE.
 var settings_owner := NONE
+## Difficulty per AI slot (BomberAI.Level).
+var ai_levels: Array[int] = []
+## Per human slot: the AI slot whose token its cursor carries (to pick a portrait for it), or NONE.
+var carrying: Array[int] = []
 
 ## Where each cursor was before it entered the settings, to return there.
 var _return_area: Array[int] = []
@@ -42,7 +48,8 @@ var _return_index: Array[int] = []
 
 
 func _init() -> void:
-	for list: Array[int] in [kinds, picks, resolved, cursor_area, cursor_index, _return_area, _return_index]:
+	for list: Array[int] in [kinds, picks, resolved, cursor_area, cursor_index, _return_area, _return_index,
+			ai_levels, carrying]:
 		list.resize(SLOT_COUNT)
 	reset()
 
@@ -55,6 +62,8 @@ func reset() -> void:
 	cursor_index.fill(0)
 	_return_area.fill(Area.PORTRAITS)
 	_return_index.fill(0)
+	ai_levels.fill(BomberAI.Level.NORMAL)
+	carrying.fill(NONE)
 	settings_owner = NONE
 
 
@@ -62,6 +71,7 @@ func reset() -> void:
 ## nobody is in the settings.
 func prepare() -> void:
 	settings_owner = NONE
+	carrying.fill(NONE)
 	for slot in SLOT_COUNT:
 		cursor_area[slot] = Area.PORTRAITS
 		cursor_index[slot] = picks[slot] if picks[slot] != NONE else _default_portrait(slot)
@@ -192,10 +202,11 @@ func add_player(slot: int) -> void:
 	cursor_index[slot] = _default_portrait(slot)
 
 
-func add_ai(slot: int) -> void:
+func add_ai(slot: int, level: int = BomberAI.Level.NORMAL) -> void:
 	set_off(slot)
 	kinds[slot] = Kind.AI
 	picks[slot] = RANDOM
+	ai_levels[slot] = level
 
 
 func set_off(slot: int) -> void:
@@ -205,17 +216,65 @@ func set_off(slot: int) -> void:
 	picks[slot] = NONE
 	resolved[slot] = NONE
 	cursor_area[slot] = Area.PORTRAITS
+	carrying[slot] = NONE
+	for other in SLOT_COUNT:
+		if carrying[other] == slot:
+			carrying[other] = NONE  # its token was being carried: drop it
 
 
-## What Cross on slot `slot`'s card turns it into: OFF -> PLAYER (only when a spare controller is
-## connected to sit in it) -> AI -> OFF. A human's slot does not toggle; they leave with Back.
-func next_kind(slot: int, spare_controller: bool) -> int:
+## Cross on slot `slot`'s card: OFF -> PLAYER (only when a spare controller is connected to sit
+## in it) -> AI Easy -> Normal -> Hard -> OFF. A human's slot does not change; they leave with
+## Back. Returns Kind.PLAYER with the slot still OFF when a spare controller should take it (the
+## caller assigns it, then calls add_player); otherwise applies the change and returns the kind.
+func toggle_slot(slot: int, spare_controller: bool) -> int:
 	match kinds[slot]:
 		Kind.OFF:
-			return Kind.PLAYER if spare_controller else Kind.AI
+			if spare_controller:
+				return Kind.PLAYER
+			add_ai(slot, BomberAI.Level.EASY)
 		Kind.AI:
-			return Kind.OFF
-	return Kind.PLAYER
+			if ai_levels[slot] < BomberAI.Level.HARD:
+				ai_levels[slot] += 1
+			else:
+				set_off(slot)
+	return kinds[slot]
+
+
+## Triangle on an empty card: AIs (Normal) in empty slots until 4 play, or all 6 when 4 already do.
+## Returns how many were added.
+func fill_with_ai() -> int:
+	var target := 4 if participants().size() < 4 else SLOT_COUNT
+	var added := 0
+	for slot in SLOT_COUNT:
+		if participants().size() >= target:
+			break
+		if kinds[slot] == Kind.OFF:
+			add_ai(slot)
+			added += 1
+	return added
+
+
+## Triangle on an AI's card: human `slot`'s cursor carries that AI's token.
+func pick_up_ai(slot: int, ai_slot: int) -> bool:
+	if not is_human(slot) or kinds[ai_slot] != Kind.AI:
+		return false
+	carrying[slot] = ai_slot
+	return true
+
+
+func drop_ai(slot: int) -> void:
+	carrying[slot] = NONE
+
+
+## Cross while carrying an AI's token: the portrait under the cursor becomes that AI's pick.
+func place_ai(slot: int) -> bool:
+	var ai_slot := carrying[slot]
+	if ai_slot == NONE or cursor_area[slot] != Area.PORTRAITS:
+		return false
+	if not claim_portrait(ai_slot, cursor_index[slot]):
+		return false
+	carrying[slot] = NONE
+	return true
 
 
 ## Brings slot kinds in line with which slots have a controller (InputRouter's view):

@@ -19,6 +19,7 @@ class Sim:
 	var bombs_dropped := 0
 	var specials := 0
 	var visited := {}
+	var facing := Vector2i.DOWN
 
 	func _init(target_grid: Grid, start: Vector2i, level: int) -> void:
 		grid = target_grid
@@ -60,6 +61,7 @@ class Sim:
 		view.bombs = bombs
 		view.items = items
 		view.pos = pos
+		view.facing = facing
 		view.stats = stats
 		view.others = others
 		var decision := ai.tick(view)
@@ -70,6 +72,8 @@ class Sim:
 		var moved := GridMovement.step(pos, dirs, stats.speed() / Rules.TICKS_PER_SECOND,
 			func(c: Vector2i) -> bool: return grid.is_blocking(c) or bombs.has_bomb(c))
 		pos = moved.pos
+		if moved.dir != Vector2i.ZERO:
+			facing = moved.dir
 		visited[cell()] = true
 		previous = held
 		held = decision

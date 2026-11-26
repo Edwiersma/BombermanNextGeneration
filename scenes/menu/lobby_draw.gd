@@ -67,7 +67,12 @@ static func tag_rows(ci: CanvasItem, font: Font, origin: Vector2, slots: Array, 
 
 
 ## Cursor highlight: one inset frame per cursor in its colour, plus their tags at `tag_origin`.
-static func cursors(ci: CanvasItem, font: Font, rect: Rect2, slots: Array, tag_origin: Vector2) -> void:
+## `carried`: cursor slot -> AI slot whose token it carries, drawn filled just below its tag.
+static func cursors(ci: CanvasItem, font: Font, rect: Rect2, slots: Array, tag_origin: Vector2, carried := {}) -> void:
 	for i in slots.size():
 		ci.draw_rect(rect.grow(-1.5 - i * 4.0), Palette.CURSOR_COLORS[slots[i]], false, 3.0)
 	tag_rows(ci, font, tag_origin, slots, false)
+	for i in slots.size():
+		if carried.has(slots[i]):
+			var offset := Vector2((i % 3) * (TAG_SIZE.x + 3.0), (i / 3) * (TAG_SIZE.y + 2.0) + TAG_SIZE.y + 2.0)
+			tag(ci, font, tag_origin + offset, carried[slots[i]], true)

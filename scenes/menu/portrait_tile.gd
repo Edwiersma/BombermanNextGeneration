@@ -10,6 +10,7 @@ var portrait := 0
 
 var _claimed: Array = []
 var _cursors: Array = []
+var _carried := {}
 var _bg := StyleBoxFlat.new()
 
 
@@ -19,12 +20,14 @@ func _init(index := 0) -> void:
 	_bg.set_corner_radius_all(10)
 
 
-## `claimed`: slots that claimed it (several only for Random); `cursors`: slots whose cursor is here.
-func show_state(claimed: Array, cursors: Array) -> void:
-	if claimed == _claimed and cursors == _cursors:
+## `claimed`: slots that claimed it (several only for Random); `cursors`: slots whose cursor is
+## here; `carried`: cursor slot -> AI slot whose token it carries.
+func show_state(claimed: Array, cursors: Array, carried := {}) -> void:
+	if claimed == _claimed and cursors == _cursors and carried == _carried:
 		return
 	_claimed = claimed
 	_cursors = cursors
+	_carried = carried
 	queue_redraw()
 
 
@@ -59,4 +62,4 @@ func _draw() -> void:
 		var width := shown * Draw.TAG_SIZE.x + (shown - 1) * 3.0
 		var origin := Vector2((size.x - width) / 2.0, size.y - 26.0 - Draw.TAG_SIZE.y)
 		Draw.tag_rows(self, font, origin, _claimed, true, -1.0)
-	Draw.cursors(self, font, rect, _cursors, Vector2(5, 5))
+	Draw.cursors(self, font, rect, _cursors, Vector2(5, 5), _carried)

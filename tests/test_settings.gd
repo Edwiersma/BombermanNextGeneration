@@ -93,12 +93,3 @@ func test_reset_and_duplicate() -> void:
 	check(s.equals(MatchSettings.new()), "reset")
 	check(not copy.equals(s), "copy independent")
 
-
-func test_ai_level_setting() -> void:
-	var settings := MatchSettings.new()
-	check_eq(settings.value_text("ai_level"), "Normal", "default Normal")
-	check("ai_level" in settings.rows(), "shown in the settings column")
-	settings.step("ai_level", 1)
-	check_eq(settings.value_text("ai_level"), "Hard", "up")
-	settings.step("ai_level", 1)
-	check_eq(settings.value_text("ai_level"), "Easy", "wraps")

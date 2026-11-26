@@ -4,7 +4,9 @@ extends Control
 ## live in LobbyState; this scene routes input and draws.
 ##   Join:      Cross / Space / Enter on a new controller (takes the next free slot, gets a cursor)
 ##   Move:      d-pad / left stick / WASD / arrows (hold to repeat)
-##   Cross:     claim the portrait under the cursor; on a slot card, toggle Off / Player / AI
+##   Cross:     claim the portrait under the cursor; on a slot card, step Off / Player / AI level
+##   Triangle:  on an AI's card, pick up its token (Cross on a portrait gives it to the AI); on an
+##              empty card, fill empty slots with AIs; elsewhere, jump to the settings
 ##   Back:      drop your portrait, then leave; with nobody joined, back to the main menu
 ##   Start:     begin once every player has a portrait (one participant = practice)
 ##   Settings:  move right past the end of a row (or Triangle / Q / Delete); left or Back leaves.
@@ -122,35 +124,50 @@ func _cursor_action(slot: int, action: StringName) -> void:
 	match action:
 		&"bomb":
 			var index := _lobby.cursor_index[slot]
-			if _lobby.cursor_area[slot] == LobbyState.Area.SLOTS:
+			var on_cards := _lobby.cursor_area[slot] == LobbyState.Area.SLOTS
+			if _lobby.carrying[slot] != LobbyState.NONE:
+				if on_cards:
+					_lobby.drop_ai(slot)
+				elif not _lobby.place_ai(slot):
+					_flash_not_free(index)
+			elif on_cards:
 				_toggle_slot(index)
 			elif not _lobby.claim(slot):
-				var holder := _lobby.claimed_by(index)
-				_flash("Locked" if LobbyState.is_locked(index) else "Taken by P%d" % (holder + 1))
+				_flash_not_free(index)
 		&"back":
-			if _lobby.has_pick(slot):
+			if _lobby.carrying[slot] != LobbyState.NONE:
+				_lobby.drop_ai(slot)
+			elif _lobby.has_pick(slot):
 				_lobby.unclaim(slot)
 			else:
 				_lobby.set_off(slot)
 				InputRouter.release_slot(slot)
 		&"menu":
-			if _lobby.enter_settings(slot):
+			var card := _lobby.cursor_index[slot] if _lobby.cursor_area[slot] == LobbyState.Area.SLOTS else LobbyState.NONE
+			if card != LobbyState.NONE and _lobby.kinds[card] == LobbyState.Kind.AI:
+				_lobby.pick_up_ai(slot, card)
+			elif card != LobbyState.NONE and _lobby.kinds[card] == LobbyState.Kind.OFF:
+				if _lobby.fill_with_ai() == 0:
+					_flash("No empty slots")
+			elif _lobby.enter_settings(slot):
 				_settings_section.focus(slot)
 			else:
 				_flash_settings_busy()
 
 
-## Cross on a slot card: Off -> Player (a spare connected pad takes it) -> AI -> Off.
+func _flash_not_free(portrait: int) -> void:
+	var holder := _lobby.claimed_by(portrait)
+	_flash("Locked" if LobbyState.is_locked(portrait) else "Taken by P%d" % (holder + 1))
+
+
+## Cross on a slot card: Off -> Player (a spare connected pad takes it) -> AI Easy / Normal / Hard
+## -> Off.
 func _toggle_slot(target: int) -> void:
 	var spare := InputRouter.spare_pads()
-	match _lobby.next_kind(target, not spare.is_empty()):
-		LobbyState.Kind.PLAYER:
-			if _lobby.kinds[target] == LobbyState.Kind.OFF and InputRouter.assign_to(spare[0], target):
-				_lobby.add_player(target)
-		LobbyState.Kind.AI:
-			_lobby.add_ai(target)
-		LobbyState.Kind.OFF:
-			_lobby.set_off(target)
+	var kind := _lobby.toggle_slot(target, not spare.is_empty())
+	if kind == LobbyState.Kind.PLAYER and _lobby.kinds[target] == LobbyState.Kind.OFF \
+			and InputRouter.assign_to(spare[0], target):
+		_lobby.add_player(target)
 
 
 func _settings_action(slot: int, action: StringName) -> void:
@@ -289,7 +306,7 @@ func _refresh() -> void:
 			claimed = _lobby.random_pickers()
 		elif _lobby.claimed_by(portrait) != LobbyState.NONE:
 			claimed = [_lobby.claimed_by(portrait)]
-		_tiles[portrait].show_state(claimed, _lobby.cursors_on(LobbyState.Area.PORTRAITS, portrait))
+		_tiles[portrait].show_state(claimed, _lobby.cursors_on(LobbyState.Area.PORTRAITS, portrait), _carried())
 
 	var spare_pad := not InputRouter.spare_pads().is_empty()
 	for slot in LobbyState.SLOT_COUNT:
@@ -300,25 +317,40 @@ func _refresh() -> void:
 			LobbyState.Kind.PLAYER:
 				device = InputRouter.device_label(InputRouter.device_in_slot(slot))
 			LobbyState.Kind.AI:
-				device = "Computer, %s" % GameState.settings.value_text("ai_level")
-				hint = "Cross: turn off"
+				device = "Computer, %s" % BomberAI.LEVEL_NAMES[_lobby.ai_levels[slot]]
+				hint = ("Cross: harder" if _lobby.ai_levels[slot] < BomberAI.Level.HARD else "Cross: turn off") \
+					+ "\nTriangle: pick"
 			LobbyState.Kind.OFF:
-				hint = "Cross: add player" if spare_pad else "Cross: add AI"
+				hint = ("Cross: add player" if spare_pad else "Cross: add AI") + "\nTriangle: fill"
 		_cards[slot].show_state({
 			"kind": kind,
 			"pick": _lobby.picks[slot],
 			"device": device,
 			"cursors": _lobby.cursors_on(LobbyState.Area.SLOTS, slot),
+			"carried": _carried(),
 			"hint": hint,
 		})
 	_refresh_prompt()
 
 
+## Human slot -> AI slot whose token its cursor carries.
+func _carried() -> Dictionary:
+	var carried := {}
+	for slot in LobbyState.SLOT_COUNT:
+		if _lobby.carrying[slot] != LobbyState.NONE:
+			carried[slot] = _lobby.carrying[slot]
+	return carried
+
+
 func _refresh_prompt() -> void:
 	var color := UI.ACCENT
+	var carriers := _carried()
 	if _flash_left > 0.0:
 		_prompt.text = _flash_text
 		color = WARN
+	elif not carriers.is_empty():
+		var slot: int = carriers.keys()[0]
+		_prompt.text = "P%d: pick a bomber for P%d (Cross), Back to cancel" % [slot + 1, carriers[slot] + 1]
 	elif _lobby.humans().is_empty():
 		_prompt.text = "Press Cross / Space / Enter to join     (Back: main menu)"
 	elif not _lobby.can_start():
